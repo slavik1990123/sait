@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
+  base: '/sait/',
   plugins: [react(), tailwindcss()],
   server: {
     host: true,
