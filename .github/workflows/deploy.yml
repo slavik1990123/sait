@@ -11,10 +11,11 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  actions: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -30,6 +31,18 @@ jobs:
       - run: npm ci
 
       - run: npm run build
+
+      - name: Remove stale github-pages artifacts in this run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          IDS=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts" \
+            --jq '.artifacts[] | select(.name == "github-pages") | .id' || true)
+          for id in $IDS; do
+            echo "Deleting leftover artifact $id"
+            gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$id" || true
+          done
 
       - uses: actions/configure-pages@v5
 
