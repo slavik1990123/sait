@@ -1,3 +1,6 @@
+import AuroraBackground from './components/AuroraBackground'
+import CursorGlow from './components/CursorGlow'
+import ScrollProgress from './components/ScrollProgress'
 import Nav from './components/Nav'
 import Hero from './components/Hero'
 import Problems from './components/Problems'
@@ -9,7 +12,10 @@ import Footer from './components/Footer'
 
 export default function App() {
   return (
-    <div className="relative min-h-screen overflow-x-hidden">
+    <div className="relative min-h-screen">
+      <AuroraBackground />
+      <CursorGlow />
+      <ScrollProgress />
       <Nav />
       <main>
         <Hero />
