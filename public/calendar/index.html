@@ -24,6 +24,7 @@
   --now:#ea4335; --carried:#e8a800; --carried-bg:rgba(246,191,38,.14);
   --done:#9aa0a9; --danger:#d93025; --ok:#188038; --scrim:rgba(15,18,28,.35);
   --shadow:0 10px 30px rgba(20,24,40,.16);
+  --rem-bg:#1f2023; --rem-fg:#ffffff; --rem-ack:#1a73e8; --rem-snz:rgba(255,255,255,.14); --rem-link:#8ab4f8;
   --font:'Golos Text',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
@@ -31,12 +32,14 @@
   --accent:#8ab4f8; --accent-fg:#0d1b33; --accent-soft:rgba(138,180,248,.14);
   --now:#f28b82; --carried:#fdd663; --carried-bg:rgba(246,191,38,.11);
   --done:#6c717b; --danger:#f28b82; --ok:#81c995; --scrim:rgba(0,0,0,.55); --shadow:0 10px 30px rgba(0,0,0,.55);
+  --rem-bg:#f1f3f4; --rem-fg:#16171a; --rem-ack:#1a73e8; --rem-snz:rgba(0,0,0,.08); --rem-link:#1a73e8;
   color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#121316; --surface:#1c1d21; --surface2:#26282d; --fg:#e7e8eb; --muted:#9298a3; --line:#2c2e34;
   --accent:#8ab4f8; --accent-fg:#0d1b33; --accent-soft:rgba(138,180,248,.14);
   --now:#f28b82; --carried:#fdd663; --carried-bg:rgba(246,191,38,.11);
   --done:#6c717b; --danger:#f28b82; --ok:#81c995; --scrim:rgba(0,0,0,.55); --shadow:0 10px 30px rgba(0,0,0,.55);
+  --rem-bg:#f1f3f4; --rem-fg:#16171a; --rem-ack:#1a73e8; --rem-snz:rgba(0,0,0,.08); --rem-link:#1a73e8;
   color-scheme:dark}
 
 html{height:100%;box-sizing:border-box}
@@ -215,6 +218,39 @@ input,textarea,select{font:inherit;font-size:16px;color:var(--fg)}
 .toast span{flex:1}
 .toast button{color:var(--accent);font-weight:700;filter:brightness(1.3)}
 
+/* ---------- meeting reminders ---------- */
+.rem-stack{position:absolute;left:8px;right:8px;top:8px;z-index:45;display:flex;flex-direction:column;gap:8px;max-height:78%;overflow-y:auto;pointer-events:none}
+.rem-card{pointer-events:auto;position:relative;background:var(--rem-bg);color:var(--rem-fg);border-radius:18px;padding:13px 14px 12px 20px;box-shadow:0 14px 36px rgba(0,0,0,.38);overflow:hidden;animation:drop .35s cubic-bezier(.2,.8,.2,1);transition:opacity .18s,transform .18s}
+.rem-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:7px;background:var(--c)}
+.rem-card.ping{animation:remPing .9s ease}
+@keyframes remPing{0%{transform:none}15%{transform:translateX(-7px)}30%{transform:translateX(7px)}45%{transform:translateX(-5px)}60%{transform:translateX(4px)}75%{transform:translateX(-2px)}100%{transform:none}}
+.rem-card.leaving{opacity:0;transform:translateY(-12px)}
+.rem-top{display:flex;align-items:center;gap:7px;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em}
+.rem-app{opacity:.7}
+.rem-when{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:700;font-size:13px;font-variant-numeric:tabular-nums}
+.rem-dot{width:8px;height:8px;border-radius:50%;background:#EA4335;animation:blink 1.2s infinite;flex:none}
+.rem-title{font-size:18px;font-weight:700;margin-top:6px;line-height:1.25;cursor:pointer;overflow-wrap:anywhere}
+.rem-time{font-size:14px;margin-top:3px;font-variant-numeric:tabular-nums;opacity:.9}
+.rem-desc{font-size:13.5px;margin-top:6px;opacity:.78;line-height:1.4;overflow-wrap:anywhere}
+.rem-link{display:inline-block;margin-top:8px;font-size:14px;font-weight:600;color:var(--rem-link)}
+.rem-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.rem-btns button{height:44px;border-radius:12px;font-weight:700;font-size:15px}
+.rem-ack{background:var(--rem-ack);color:#fff}
+.rem-snz{background:var(--rem-snz);color:var(--rem-fg)}
+
+/* ---------- dragging meetings ---------- */
+.ev,.chip{-webkit-touch-callout:none}
+.ev.drag-src,.chip.drag-src{opacity:.35;outline:2px dashed var(--fg);outline-offset:-2px}
+.ev-ghost{opacity:.82;z-index:6;left:1px!important;width:calc(100% - 2px)!important;pointer-events:none;box-shadow:var(--shadow);outline:2px solid var(--fg);outline-offset:-1px}
+.ev-ghost.conflict{outline:2px dashed #D50000}
+.drag-float{position:fixed;z-index:58;pointer-events:none;transform:translate(-50%,-100%);max-width:200px;font-size:13px;padding:6px 10px;border-radius:8px;box-shadow:var(--shadow);opacity:.9}
+.drag-float.off{opacity:.35}
+.drag-tip{position:fixed;z-index:59;pointer-events:none;transform:translate(-50%,-100%);background:var(--fg);color:var(--bg);font-size:13px;font-weight:600;padding:6px 11px;border-radius:10px;box-shadow:var(--shadow);white-space:nowrap;text-align:center;font-variant-numeric:tabular-nums}
+.drag-tip small{display:block;font-weight:600;color:#F28B82;font-size:11.5px;margin-top:1px}
+.drag-tip.warn{background:#D50000;color:#fff}
+.col.drop-col{background:var(--accent-soft)}
+.mcell.drop-cell{background:var(--accent-soft);box-shadow:inset 0 0 0 2px var(--accent)}
+
 /* ---------- sheet ---------- */
 .sheet-wrap{position:absolute;inset:0;z-index:50;display:flex;flex-direction:column;justify-content:flex-end}
 .scrim{position:absolute;inset:0;background:var(--scrim);animation:fade .2s}
@@ -273,7 +309,7 @@ html{padding-top:env(safe-area-inset-top,0px)}
     <button data-tab="1" aria-selected="false"><span class="run-pill" id="runPill" hidden></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6l1.2 1.2L7 5M3.5 12l1.2 1.2L7 11M3.5 18l1.2 1.2L7 17"/></svg>Задачи<span class="tab-badge" id="tabBadge" hidden></span></button>
   </nav>
   <button class="fab" id="fab" aria-label="Добавить"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
-  <div class="banner" id="banner" hidden></div>
+  <div class="rem-stack" id="remStack" aria-live="assertive"></div>
   <div class="toast" id="toast" hidden></div>
   <div class="sheet-wrap" id="sheetWrap" hidden><div class="scrim" id="scrim"></div><div class="sheet" id="sheet"></div></div>
 </div>
@@ -318,7 +354,7 @@ function fmtClock(ms){let s=Math.floor(ms/1000);const h=Math.floor(s/3600);s-=h*
 const KEY='moi-kalendar-proto-v1';
 let S;
 function seed(demo=true){
-  if(!demo)return {events:[],tasks:[],notified:{}};
+  if(!demo)return {events:[],tasks:[],notified:{},rem:{}};
   const t=today(), nm=Math.min(nowMin()+6, 23*60);
   const demoStart=fromMin(nm), demoEnd=fromMin(Math.min(nm+30,24*60-1));
   const E=(o)=>Object.assign({id:uid(),allDay:false,remind:5,place:'',desc:'',color:'peacock'},o);
@@ -350,11 +386,13 @@ function seed(demo=true){
       T({title:'Идеи названия и логотипа для питомника',desc:'Весёлый, игровой брендинг',date:null}),
       T({title:'Автоматизация полива в теплице',desc:'',date:null}),
     ],
-    notified:{}
+    notified:{},rem:{}
   };
 }
-function load(){try{const r=localStorage.getItem(KEY);if(r){const o=JSON.parse(r);if(o&&o.events&&o.tasks){o.notified=o.notified||{};return o}}}catch(e){}return seed(!window.APP_EMPTY_START)}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function load(){try{const r=localStorage.getItem(KEY);if(r){const o=JSON.parse(r);if(o&&o.events&&o.tasks){o.notified=o.notified||{};o.rem=o.rem||{};return o}}}catch(e){}return seed(!window.APP_EMPTY_START)}
+let STORAGE_OK=true;try{localStorage.setItem('__kal_t','1');localStorage.removeItem('__kal_t')}catch(e){STORAGE_OK=false}
+/* returns false when the change could not be written */
+function save(){if(window.__failSave)return false;if(!STORAGE_OK)return true;try{localStorage.setItem(KEY,JSON.stringify(S));return true}catch(e){return false}}
 S=load();
 
 const UI={pane:0,view:'3day',calDate:today(),taskDate:today(),scrolled:false};
@@ -437,7 +475,7 @@ function monthHTML(){
   let cells='';
   for(let i=0;i<42;i++){const x=addDays(start,i),xd=parse(x);
     const evs=evsOn(x).sort((a,b)=>(b.allDay-a.allDay)||toMin(a.start)-toMin(b.start));
-    const chips=evs.slice(0,3).map(e=>{const c=colorOf(e.color);return`<div class="chip" style="background:${c.hex};color:${c.dark?'#3b2f00':'#fff'}">${esc(e.title)}</div>`}).join('');
+    const chips=evs.slice(0,3).map(e=>{const c=colorOf(e.color);return`<div class="chip" data-mev="${e.id}" style="background:${c.hex};color:${c.dark?'#3b2f00':'#fff'}">${esc(e.title)}</div>`}).join('');
     cells+=`<button class="mcell${xd.getMonth()!==d.getMonth()?' other':''}${x===t?' today':''}" data-act="pick" data-date="${x}"><span class="n">${xd.getDate()}</span>${chips}${evs.length>3?`<span class="more">+${evs.length-3}</span>`:''}</button>`}
   return `<div class="month"><div class="mwd">${WD.map(w=>`<span>${w}</span>`).join('')}</div><div class="mgrid">${cells}</div></div>`;
 }
@@ -605,11 +643,13 @@ $('#fab').addEventListener('click',()=>{if(UI.pane===0){const m=UI.calDate===tod
 /* ---------- gestures: pane swipe, week-strip swipe, task-row swipe ---------- */
 let G=null;const app=$('#app');
 app.addEventListener('pointerdown',e=>{
-  if(e.button>0||e.target.closest('.sheet-wrap,.banner,.toast,.tabbar,.fab,input,textarea,select'))return;
+  if(e.button>0||e.target.closest('.sheet-wrap,.rem-stack,.toast,.tabbar,.fab,input,textarea,select'))return;
   const row=e.target.closest('.task-row'),strip=e.target.closest('[data-strip]');
   let mode='pane';if(row&&!e.target.closest('button'))mode='row';else if(strip)mode='strip';
   G={x:e.clientX,y:e.clientY,mode,row,strip,active:false,dx:0,id:e.pointerId};
   if(mode==='row'&&!row.classList.contains('done')){const g=G;g.lp=setTimeout(()=>startDrag(g,e.pointerId),380)}
+  const evEl=mode==='pane'&&e.target.closest('#calPane [data-ev],#calPane [data-mev]');
+  if(evEl){G.evEl=evEl;G.ptype=e.pointerType;if(e.pointerType!=='mouse'){const g=G;g.lp=setTimeout(()=>startEvDrag(g,g.x,g.y,e.pointerId),420)}}
 });
 function startDrag(g,pid){
   if(G!==g||g.active||g.mode!=='row')return;
@@ -635,10 +675,12 @@ function finishDrag(g,cancel){
   if(!cancel&&g.n!==g.i0){const[m]=ids.splice(g.i0,1);ids.splice(g.n,0,m);ids.forEach((id,i)=>{const k=taskById(id);if(k)k.order=i});save()}
   renderTasks();
 }
-app.addEventListener('touchmove',e=>{if(G&&G.mode==='drag')e.preventDefault()},{passive:false});
+app.addEventListener('touchmove',e=>{if(G&&(G.mode==='drag'||G.mode==='evdrag'))e.preventDefault()},{passive:false});
 app.addEventListener('pointermove',e=>{
   if(!G||e.pointerId!==G.id)return;const dx=e.clientX-G.x,dy=e.clientY-G.y;
   if(G.mode==='drag'){moveDrag(G,e.clientY);return}
+  if(G.mode==='evdrag'){G.lx=e.clientX;G.ly=e.clientY;moveEvDrag(G);return}
+  if(G.evEl&&G.ptype==='mouse'&&!G.active&&Math.hypot(dx,dy)>5){startEvDrag(G,G.x,G.y,e.pointerId);if(G&&G.mode==='evdrag'){G.lx=e.clientX;G.ly=e.clientY;moveEvDrag(G)}return}
   if(Math.abs(dx)>8||Math.abs(dy)>8)clearTimeout(G.lp);
   if(!G.active){
     if(Math.abs(dx)>10&&Math.abs(dx)>Math.abs(dy)*1.2){G.active=true;
@@ -657,6 +699,7 @@ app.addEventListener('pointermove',e=>{
 function endGesture(cancel){
   if(!G)return;const g=G;G=null;clearTimeout(g.lp);
   if(g.mode==='drag'){finishDrag(g,cancel);return}
+  if(g.mode==='evdrag'){endEvDrag(g,cancel);return}
   if(!g.active)return;
   suppressUntil=Date.now()+350;const dx=cancel?0:g.dx;
   if(g.mode==='pane'){if(UI.pane===0&&dx<-60)setPane(1);else if(UI.pane===1&&dx>60)setPane(0);else setPane(UI.pane)}
@@ -670,6 +713,101 @@ function endGesture(cancel){
 }
 app.addEventListener('pointerup',()=>endGesture(false));
 app.addEventListener('pointercancel',()=>endGesture(true));
+
+/* ---------- moving meetings by drag ----------
+   mouse: press + move >5px; touch: long press 420ms, then move. Snap 15 min, duration kept. */
+const SNAP=15;
+const evDur=ev=>{const s=toMin(ev.start);let e=toMin(ev.end);if(e<=s)e=s+30;return e-s};
+const shortDate=d=>`${WD[wdi(d)]}, ${parse(d).getDate()} ${MONTHS_G[parse(d).getMonth()]}`;
+function startEvDrag(g,x,y,pid){
+  if(G!==g||g.active||g.mode==='evdrag')return;
+  const id=g.evEl.dataset.ev||g.evEl.dataset.mev,ev=evById(id);if(!ev)return;
+  g.mode='evdrag';g.ev=ev;g.lx=x;g.ly=y;g.target=null;
+  g.kind=g.evEl.dataset.mev?'month':ev.allDay?'allday':'timed';
+  g.dur=evDur(ev);
+  if(g.kind==='timed'){const r=g.evEl.closest('[data-col]').getBoundingClientRect();g.grab=(y-r.top)/H*60-toMin(ev.start)}
+  g.evEl.classList.add('drag-src');
+  const c=colorOf(ev.color);
+  const gh=document.createElement('div');
+  gh.className=g.kind==='timed'?'ev ev-ghost':'chip drag-float';
+  gh.style.background=c.hex;gh.style.color=c.dark?'#3b2f00':'#fff';
+  gh.innerHTML=`<b>${esc(ev.title)||'Без названия'}</b>`;
+  g.ghost=gh;if(g.kind!=='timed')app.appendChild(gh);
+  const tip=document.createElement('div');tip.className='drag-tip';app.appendChild(tip);g.tip=tip;
+  suppressUntil=Date.now()+600000;
+  try{app.setPointerCapture(pid)}catch(_){}
+  try{navigator.vibrate&&navigator.vibrate(12)}catch(_){}
+  const loop=()=>{if(G!==g||g.mode!=='evdrag')return;autoScroll(g);g.raf=requestAnimationFrame(loop)};g.raf=requestAnimationFrame(loop);
+  moveEvDrag(g);
+}
+function autoScroll(g){
+  if(g.kind==='month')return;const gs=$('#gridScroll');if(!gs)return;const r=gs.getBoundingClientRect(),EDGE=48;
+  let v=0;if(g.ly<r.top+EDGE&&g.ly>r.top-60)v=-Math.ceil((r.top+EDGE-g.ly)/6);else if(g.ly>r.bottom-EDGE&&g.ly<r.bottom+60)v=Math.ceil((g.ly-(r.bottom-EDGE))/6);
+  if(v){const before=gs.scrollTop;gs.scrollTop+=Math.max(-14,Math.min(14,v));if(gs.scrollTop!==before)moveEvDrag(g)}
+}
+function clearDropMarks(){document.querySelectorAll('.drop-col,.drop-cell').forEach(el=>el.classList.remove('drop-col','drop-cell'))}
+function moveEvDrag(g){
+  const ev=g.ev;let label='',warn='',valid=false;clearDropMarks();
+  if(g.kind==='month'){
+    g.ghost.style.left=g.lx+'px';g.ghost.style.top=(g.ly-18)+'px';
+    const cell=document.elementFromPoint(g.lx,g.ly)?.closest('.mcell');
+    if(cell){valid=true;cell.classList.add('drop-cell');g.target={date:cell.dataset.date};
+      label=`${dateLong(cell.dataset.date)}, ${ev.allDay?'весь день':ev.start}`}
+  } else {
+    const gs=$('#gridScroll'),gr=gs&&gs.getBoundingClientRect(),ad=document.querySelector('#calPane .allday');
+    const top=ad?ad.getBoundingClientRect().top:gr.top;
+    const col=[...document.querySelectorAll('#gridScroll [data-col]')].find(c=>{const r=c.getBoundingClientRect();return g.lx>=r.left&&g.lx<r.right});
+    const inY=gr&&g.ly>=(g.kind==='allday'?top:gr.top)&&g.ly<=gr.bottom;
+    if(col&&inY){valid=true;const d=col.dataset.col;
+      if(g.kind==='allday'){col.classList.add('drop-col');g.target={date:d};label=`${shortDate(d)} · весь день`;
+        g.ghost.style.left=g.lx+'px';g.ghost.style.top=(g.ly-18)+'px'}
+      else{const r=col.getBoundingClientRect();
+        let s=Math.round(((g.ly-r.top)/H*60-g.grab)/SNAP)*SNAP;s=Math.max(0,Math.min(s,24*60-g.dur));
+        const e=s+g.dur,st=fromMin(s),en=e>=24*60?'23:59':fromMin(e);
+        g.target={date:d,start:st,end:en};
+        if(g.ghost.parentNode!==col)col.appendChild(g.ghost);
+        g.ghost.style.top=(s/60*H)+'px';g.ghost.style.height=(g.dur/60*H-1)+'px';
+        label=`${shortDate(d)} · ${st}–${en}`;
+        const hit=evsOn(d).find(o=>o.id!==ev.id&&!o.allDay&&toMin(o.start)<e&&Math.max(toMin(o.end),toMin(o.start)+15)>s);
+        if(hit)warn=`Пересекается с «${hit.title}»`;
+        g.ghost.classList.toggle('conflict',!!hit)}
+    }
+  }
+  if(g.kind==='timed')g.ghost.hidden=!valid;else g.ghost.classList.toggle('off',!valid);
+  if(!valid)g.target=null;
+  g.tip.innerHTML=valid?`${esc(label)}${warn?`<small>${esc(warn)}</small>`:''}`:'Отпустите — перенос отменится';
+  g.tip.classList.toggle('warn',!valid);
+  const ar=app.getBoundingClientRect();
+  g.tip.style.left=Math.max(ar.left+100,Math.min(g.lx,ar.right-100))+'px';
+  g.tip.style.top=Math.max(ar.top+40,g.ly-(g.kind==='timed'?28:52))+'px';
+}
+function endEvDrag(g,cancel){
+  cancelAnimationFrame(g.raf);clearDropMarks();
+  g.ghost&&g.ghost.remove();g.tip&&g.tip.remove();g.evEl&&g.evEl.classList.remove('drag-src');
+  suppressUntil=Date.now()+350;
+  const t=g.target;
+  if(cancel||!t){if(!cancel)toast('Перенос отменён');return}
+  moveEvent(g.ev,g.kind==='timed'?{date:t.date,start:t.start,end:t.end}:{date:t.date});
+}
+function moveEvent(ev,to){
+  const before={date:ev.date,start:ev.start,end:ev.end};
+  if(to.date===ev.date&&(to.start==null||to.start===ev.start))return;
+  const snap=remSnapshot(ev.id);
+  Object.assign(ev,to);
+  dropRems(ev.id);
+  if(!save()){
+    Object.assign(ev,before);Object.assign(S.rem,snap);
+    renderCal();renderRems();toast('Не удалось сохранить перенос. Встреча осталась на прежнем месте.');return;
+  }
+  renderCal();checkReminders();
+  toast(`Событие перенесено на ${dateLong(ev.date)}${ev.allDay?'':', '+ev.start}`,'Отменить',()=>{
+    Object.assign(ev,before);dropRems(ev.id);Object.assign(S.rem,snap);
+    if(!save())toast('Не удалось отменить перенос');
+    renderCal();checkReminders();
+  });
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&G&&G.mode==='evdrag'){const g=G;G=null;endEvDrag(g,true);toast('Перенос отменён')}});
+
 
 /* ---------- sheets ---------- */
 const wrap=$('#sheetWrap'),sheet=$('#sheet');
@@ -702,7 +840,7 @@ function openEvent(ev,date,startMin){
     const sw=x.target.closest('[data-c]');if(sw){e.color=sw.dataset.c;sheet.querySelectorAll('.sw').forEach(b=>b.setAttribute('aria-pressed',String(b===sw)));$('#colName').textContent=colorOf(e.color).name;return}
     const b=x.target.closest('[data-s]');if(!b)return;const s=b.dataset.s;
     if(s==='cancel')closeSheet();
-    else if(s==='del'){if(b.dataset.sure){const i=S.events.findIndex(z=>z.id===e.id);const old=S.events[i];S.events.splice(i,1);save();closeSheet();renderCal();toast('Встреча удалена','Вернуть',()=>{S.events.splice(i,0,old);save();renderCal()})}else{b.dataset.sure=1;b.textContent='Нажмите ещё раз, чтобы удалить'}}
+    else if(s==='del'){if(b.dataset.sure){const i=S.events.findIndex(z=>z.id===e.id);const old=S.events[i];S.events.splice(i,1);save();closeSheet();renderCal();checkReminders();toast('Встреча удалена','Вернуть',()=>{S.events.splice(i,0,old);save();renderCal();checkReminders()})}else{b.dataset.sure=1;b.textContent='Нажмите ещё раз, чтобы удалить'}}
     else if(s==='save'){
       e.title=$('#evTitle').value.trim()||'Без названия';e.allDay=allEl.checked;e.date=$('#evDate').value||e.date;
       e.start=$('#evStart').value||'10:00';e.end=$('#evEnd').value||fromMin(toMin(e.start)+60);
@@ -748,7 +886,7 @@ function openSettings(){
   const perm=('Notification' in window)?Notification.permission:'unsupported';
   openSheet(`<div class="sheet-head"><span style="min-width:64px"></span><b>Настройки</b><button class="r" data-s="cancel">Готово</button></div>
   <h4>Напоминания о встречах</h4>
-  <p class="note">По умолчанию напоминание приходит за 5 минут до начала. Время можно поменять в каждой встрече. В прототипе оно появляется баннером внутри приложения. В рабочей версии придёт push-уведомление с вашего сервера, даже если приложение закрыто.</p>
+  <p class="note">Напоминание приходит за 5 минут до начала (время меняется в каждой встрече) и висит, пока вы не нажмёте «Увидел» или «Через 5 минут». Пока нет ответа, сигнал повторяется каждые ${REM_CFG.repeatEveryMin} мин, не больше ${REM_CFG.maxRepeats} раз. Звук и сигналы работают, когда приложение открыто. При закрытом приложении и заблокированном телефоне напоминание пока не сработает: для этого нужен push с сервера.</p>
   <button class="wide-btn" data-s="testn">Показать тестовое напоминание</button>
   ${perm==='default'?`<button class="wide-btn" data-s="perm">Разрешить системные уведомления</button>`:''}
   <h4>Перенос задач</h4>
@@ -765,11 +903,11 @@ function openSettings(){
   sheet.onclick=async x=>{
     const b=x.target.closest('[data-s]');if(!b)return;const s=b.dataset.s;
     if(s==='cancel')closeSheet();
-    else if(s==='testn'){const t=today();const up=S.events.filter(e=>!e.allDay&&(e.date>t||(e.date===t&&toMin(e.start)>nowMin()))).sort((a,b)=>(a.date+a.start).localeCompare(b.date+b.start))[0]||S.events[0];closeSheet();if(up)showBanner(up,5)}
+    else if(s==='testn'){unlockAudio();const t=today();const up=S.events.filter(e=>!e.allDay&&(e.date>t||(e.date===t&&toMin(e.start)>nowMin()))).sort((a,b)=>(a.date+a.start).localeCompare(b.date+b.start))[0]||S.events.find(e=>!e.allDay);closeSheet();if(up){S.rem['test|'+Date.now()]={evId:up.id,test:true,state:'pending',since:Date.now(),pings:0,lastPing:0};save();tickRems()}else toast('Добавьте встречу, чтобы проверить напоминание')}
     else if(s==='perm'){try{const r=await Notification.requestPermission();toast(r==='granted'?'Системные уведомления включены':'Браузер не дал разрешение — останутся баннеры в приложении')}catch(_){toast('Здесь системные уведомления недоступны')}}
     else if(s==='newday'){const ids=[];S.tasks.forEach(k=>{if(!k.done&&k.date&&k.date<=today()){k.order=keyOf(k)-1e13;k.carried=(k.carried||0)+1;k.date=today();ids.push(k.id)}});S.review={date:today(),ids,done:false};save();closeSheet();UI.taskDate=today();setPane(1);renderTasks();if(ids.length)setTimeout(maybeReview,350);else toast('Нет невыполненных задач')}
     else if(s==='copy'){const txt=JSON.stringify(S);try{await navigator.clipboard.writeText(txt);toast('Данные скопированы')}catch(_){const j=$('#jsonBox');j.value=txt;j.select();toast('Выделено — скопируйте вручную')}}
-    else if(s==='restore'){try{const o=JSON.parse($('#jsonBox').value);if(!o.events||!o.tasks)throw 0;o.notified=o.notified||{};S=o;save();closeSheet();renderAll();toast('Данные восстановлены')}catch(_){toast('Не получилось прочитать данные. Вставьте текст целиком.')}}
+    else if(s==='restore'){try{const o=JSON.parse($('#jsonBox').value);if(!o.events||!o.tasks)throw 0;o.notified=o.notified||{};o.rem=o.rem||{};S=o;save();closeSheet();renderAll();toast('Данные восстановлены')}catch(_){toast('Не получилось прочитать данные. Вставьте текст целиком.')}}
     else if(s==='clear'){if(b.dataset.sure){S=seed(false);save();closeSheet();UI.scrolled=false;renderAll();toast('Все данные удалены')}else{b.dataset.sure=1;b.textContent='Нажмите ещё раз — всё удалится'}}
     else if(s==='reset'){if(b.dataset.sure){S=seed(true);save();closeSheet();UI.calDate=today();UI.taskDate=today();UI.scrolled=false;carryOver();renderAll();setTimeout(maybeReview,400)}else{b.dataset.sure=1;b.textContent='Нажмите ещё раз — все изменения пропадут'}}
   };
@@ -783,22 +921,128 @@ function toast(msg,actLabel,act){
   if(actLabel)el.querySelector('button').onclick=()=>{el.hidden=true;act()};
   toastT=setTimeout(()=>el.hidden=true,4000);
 }
-let bannerT;
-function showBanner(ev,mins){
-  const el=$('#banner'),c=colorOf(ev.color);
-  const left=mins!=null?mins:Math.max(0,Math.round((parse(ev.date).getTime()+toMin(ev.start)*60000-Date.now())/60000));
-  el.innerHTML=`<div class="bn-ic" style="background:${c.hex}">${parse(ev.date).getDate()}</div><div style="min-width:0;flex:1"><div class="bn-app">Календарь · сейчас</div><div class="bn-title">${esc(ev.title)}</div><div class="bn-sub">${left>0?`Через ${left} мин`:'Начинается'} · ${ev.start}–${ev.end}${ev.place?' · '+esc(ev.place):''}</div></div>`;
-  el.hidden=false;clearTimeout(bannerT);bannerT=setTimeout(()=>el.hidden=true,9000);
-  el.onclick=()=>{el.hidden=true;setPane(0);UI.view='3day';UI.calDate=ev.date;renderCal();openEvent(ev)};
-  try{if('Notification' in window&&Notification.permission==='granted')new Notification(ev.title,{body:`${left>0?`Через ${left} мин`:'Начинается'} · ${ev.start}`})}catch(_){}
+/* ---------- meeting reminders with confirmation ----------
+   S.rem[key] = {evId, state:'pending'|'snoozed'|'ack'|'expired', since, until, pings, lastPing, ackAt, test}
+   key = eventId|date|start  -> one instance of a meeting; moving the meeting changes the key. */
+const REM_CFG={repeatEveryMin:2,maxRepeats:3,snoozeMin:5};
+const remKey=ev=>ev.id+'|'+ev.date+'|'+ev.start;
+const evStartMs=ev=>parse(ev.date).getTime()+toMin(ev.start)*60000;
+const evEndMs=ev=>{let e=toMin(ev.end);if(e<=toMin(ev.start))e=toMin(ev.start)+30;return parse(ev.date).getTime()+e*60000};
+const evById=id=>S.events.find(e=>e.id===id);
+const remSnapshot=evId=>{const o={};for(const k in S.rem)if(S.rem[k].evId===evId&&!S.rem[k].test)o[k]={...S.rem[k]};return o};
+function dropRems(evId){for(const k in S.rem)if(S.rem[k].evId===evId&&!S.rem[k].test){delete S.rem[k];closeSystemNote(k)}}
+
+/* create due reminders, drop stale ones, wake snoozed ones */
+function reconcileRems(){
+  const now=Date.now(),R=S.rem;let ch=false;
+  for(const k in R){const r=R[k],ev=evById(r.evId);
+    const stale=!ev||ev.allDay||(!r.test&&(ev.remind<0||remKey(ev)!==k));
+    const old=ev&&(r.state==='ack'||r.state==='expired')&&now>evEndMs(ev)+7*864e5;
+    if(stale||old){delete R[k];closeSystemNote(k);ch=true}}
+  S.events.forEach(ev=>{
+    if(ev.allDay||ev.remind<0)return;
+    const k=remKey(ev),st=evStartMs(ev);
+    if(!R[k]&&now>=st-ev.remind*60000&&now<st){R[k]={evId:ev.id,state:'pending',since:now,pings:0,lastPing:0};ch=true}
+  });
+  for(const k in R){const r=R[k];
+    if(r.state==='snoozed'&&now>=r.until){const ev=evById(r.evId);
+      if(ev&&now<evEndMs(ev)){r.state='pending';r.since=now;r.pings=0;r.lastPing=0}else r.state='expired';ch=true}}
+  if(ch)save();
 }
-function checkReminders(){
-  const now=Date.now();let changed=false;
-  S.events.forEach(ev=>{if(ev.allDay||ev.remind<0)return;
-    const st=parse(ev.date).getTime()+toMin(ev.start)*60000,key=ev.id+'|'+ev.date+'|'+ev.start+'|'+ev.remind;
-    if(now>=st-ev.remind*60000&&now<st+60000&&!S.notified[key]){S.notified[key]=1;changed=true;showBanner(ev)}});
-  if(changed)save();
+/* signal pending reminders: first show + up to maxRepeats more, every repeatEveryMin */
+function tickRems(){
+  const now=Date.now();let ch=false;
+  for(const k in S.rem){const r=S.rem[k];if(r.state!=='pending')continue;const ev=evById(r.evId);if(!ev)continue;
+    const first=!r.lastPing;
+    const due=first||(r.pings<REM_CFG.maxRepeats&&now-r.lastPing>=REM_CFG.repeatEveryMin*60000);
+    if(!due)continue;
+    if(!first)r.pings++;r.lastPing=now;ch=true;
+    if(now<evEndMs(ev))setTimeout(()=>attention(k,ev,first),0);
+  }
+  if(ch)save();
+  renderRems();
 }
+function checkReminders(){reconcileRems();tickRems()}
+
+function remWhen(ev){
+  const now=Date.now(),st=evStartMs(ev),en=evEndMs(ev);
+  if(now>=en)return'Встреча прошла';
+  if(now>=st){const m=Math.floor((now-st)/60000);return m<1?'Начинается сейчас':`Идёт уже ${m} мин`}
+  const m=Math.ceil((st-now)/60000);return m<=1?'Через минуту':`Через ${m} мин`;
+}
+const isUrl=s=>/^(https?:\/\/|www\.)\S+$/i.test(String(s||'').trim());
+function renderRems(){
+  const box=$('#remStack');if(!box)return;
+  const keys=Object.keys(S.rem).filter(k=>S.rem[k].state==='pending'&&evById(S.rem[k].evId))
+    .sort((a,b)=>evStartMs(evById(S.rem[a].evId))-evStartMs(evById(S.rem[b].evId)));
+  [...box.children].forEach(el=>{if(!keys.includes(el.dataset.rem))el.remove()});
+  keys.forEach((k,i)=>{
+    const ev=evById(S.rem[k].evId);let el=box.querySelector(`[data-rem="${CSS.escape(k)}"]`);
+    if(!el){
+      const c=colorOf(ev.color),place=(ev.place||'').trim();
+      el=document.createElement('div');el.className='rem-card';el.dataset.rem=k;el.style.setProperty('--c',c.hex);
+      el.setAttribute('role','alertdialog');el.setAttribute('aria-label','Напоминание: '+ev.title);
+      el.innerHTML=`<div class="rem-top"><span class="rem-dot"></span><span class="rem-app">Напоминание о встрече</span><span class="rem-when" data-when></span></div>
+        <div class="rem-title" data-open>${esc(ev.title)||'Без названия'}</div>
+        <div class="rem-time">${dayLabel(ev.date)}, ${dateLong(ev.date)} · ${ev.start}–${ev.end}</div>
+        ${ev.desc?`<div class="rem-desc">${esc(ev.desc)}</div>`:''}
+        ${place?(isUrl(place)?`<a class="rem-link" href="${esc(/^www\./i.test(place)?'https://'+place:place)}" target="_blank" rel="noopener">Открыть ссылку на встречу</a>`:`<div class="rem-desc">${esc(place)}</div>`):''}
+        <div class="rem-btns"><button class="rem-ack" data-ra="ack">Увидел</button><button class="rem-snz" data-ra="snooze">Через ${REM_CFG.snoozeMin} минут</button></div>`;
+      box.appendChild(el);
+    }
+    if(box.children[i]!==el)box.insertBefore(el,box.children[i]);
+    const w=el.querySelector('[data-when]'),t=remWhen(ev);if(w.textContent!==t)w.textContent=t;
+  });
+  box.classList.toggle('has',keys.length>0);
+}
+$('#remStack').addEventListener('click',e=>{
+  const card=e.target.closest('[data-rem]');if(!card)return;const k=card.dataset.rem,r=S.rem[k];if(!r)return;
+  const b=e.target.closest('[data-ra]');
+  if(b){const now=Date.now();
+    if(b.dataset.ra==='ack'){r.state='ack';r.ackAt=now}
+    else{r.state='snoozed';r.until=now+REM_CFG.snoozeMin*60000;r.pings=0;r.lastPing=0}
+    save();closeSystemNote(k);card.classList.add('leaving');setTimeout(renderRems,180);
+    if(b.dataset.ra==='snooze'){const d=new Date(now+REM_CFG.snoozeMin*60000);toast(`Напомню ещё раз в ${pad(d.getHours())}:${pad(d.getMinutes())}`)}
+    return}
+  if(e.target.closest('[data-open]')){const ev=evById(r.evId);if(ev){setPane(0);UI.view='3day';UI.calDate=ev.date;renderCal();openEvent(ev)}}
+});
+function focusRem(k){renderRems();const el=$('#remStack').querySelector(`[data-rem="${CSS.escape(k)}"]`);if(el){el.classList.remove('ping');void el.offsetWidth;el.classList.add('ping')}}
+
+/* attention: visual pulse, sound (if the browser allows), system notification on the first show */
+let actx=null;
+function unlockAudio(){try{const A=window.AudioContext||window.webkitAudioContext;if(!A)return;if(!actx)actx=new A();if(actx.state==='suspended')actx.resume().catch(()=>{})}catch(_){}}
+document.addEventListener('pointerdown',unlockAudio,{capture:true,passive:true});
+function playChime(){
+  try{if(!actx||actx.state!=='running')return;const t=actx.currentTime;
+    [[880,0],[1318,.16],[880,.55],[1318,.71]].forEach(([f,d])=>{const o=actx.createOscillator(),g=actx.createGain();
+      o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(0,t+d);g.gain.linearRampToValueAtTime(.22,t+d+.02);
+      g.gain.exponentialRampToValueAtTime(.001,t+d+.38);o.connect(g);g.connect(actx.destination);o.start(t+d);o.stop(t+d+.42)})}catch(_){}
+}
+function attention(k,ev,first){
+  focusRem(k);playChime();
+  try{navigator.vibrate&&navigator.vibrate([120,80,120])}catch(_){}
+  if(first)systemNote(k,ev);
+}
+async function systemNote(k,ev){
+  try{
+    if(!('Notification' in window)||Notification.permission!=='granted')return;
+    const body=`${remWhen(ev)} · ${ev.start}–${ev.end}${ev.desc?' · '+ev.desc:''}`;
+    const reg=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration();
+    if(reg&&reg.showNotification){await reg.showNotification(ev.title,{body,tag:k,data:{rem:k},requireInteraction:true,renotify:true,icon:'icons/icon-192.png'});return}
+    const n=new Notification(ev.title,{body,tag:k,requireInteraction:true});
+    n.onclick=()=>{try{window.focus()}catch(_){}focusRem(k);n.close()};
+  }catch(_){}
+}
+function closeSystemNote(k){
+  try{navigator.serviceWorker&&navigator.serviceWorker.getRegistration().then(reg=>reg&&reg.getNotifications({tag:k})).then(ns=>(ns||[]).forEach(n=>n.close())).catch(()=>{})}catch(_){}
+}
+try{navigator.serviceWorker&&navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.rem)focusRem(e.data.rem)})}catch(_){}
+/* other open tabs: pick up acknowledgements and moves */
+window.addEventListener('storage',e=>{
+  if(e.key!==KEY||!e.newValue)return;
+  try{const o=JSON.parse(e.newValue);if(!o.events||!o.tasks)return;o.notified=o.notified||{};o.rem=o.rem||{};S=o;
+    if(!G)renderAll();renderRems()}catch(_){}
+});
 
 /* ---------- loop ---------- */
 function renderAll(){renderCal();renderTasks()}
@@ -808,8 +1052,9 @@ setInterval(()=>{
   if(r){const el=document.querySelector(`[data-timer="${r.id}"]`);if(el)el.textContent=fmtClock(spentOf(r));
     const st=$('#sumTime');if(st)st.textContent=fmtDur(S.tasks.filter(k=>k.date===UI.taskDate).reduce((s,k)=>s+spentOf(k),0));}
   updateTabs();
+  checkReminders();
   const m=nowMin();
-  if(m!==lastMin){lastMin=m;const nl=$('#nowLine');if(nl)nl.style.top=(m/60*H)+'px';checkReminders()}
+  if(m!==lastMin){lastMin=m;const nl=$('#nowLine');if(nl)nl.style.top=(m/60*H)+'px'}
   if(today()!==lastDay){const was=lastDay;lastDay=today();carryOver();if(UI.taskDate===was)UI.taskDate=lastDay;if(UI.calDate===was)UI.calDate=lastDay;renderAll();maybeReview()}
 },1000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){carryOver();renderAll();checkReminders();maybeReview()}});

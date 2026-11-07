@@ -1,5 +1,5 @@
 // Offline support: the app shell is cached; the page itself is fetched fresh when online.
-const V = 'kalendar-v3';
+const V = 'kalendar-v4';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener('activate', e => {
@@ -18,4 +18,16 @@ self.addEventListener('fetch', e => {
     if (res.ok && r.url.startsWith(self.location.origin)) { const cp = res.clone(); caches.open(V).then(c => c.put(r, cp)); }
     return res;
   })));
+});
+
+// Tapping a system notification opens the app and shows the matching reminder card.
+// It does NOT confirm the reminder: only the «Увидел» button inside the app does.
+self.addEventListener('notificationclick', e => {
+  const rem = e.notification.data && e.notification.data.rem;
+  e.notification.close();
+  e.waitUntil((async () => {
+    const list = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of list) { try { await c.focus(); } catch (_) {} c.postMessage({ rem }); return; }
+    if (self.clients.openWindow) await self.clients.openWindow('./');
+  })());
 });
