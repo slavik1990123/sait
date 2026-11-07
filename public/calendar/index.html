@@ -243,6 +243,11 @@ input,textarea,select{font:inherit;font-size:16px;color:var(--fg)}
 .ev.drag-src,.chip.drag-src{opacity:.35;outline:2px dashed var(--fg);outline-offset:-2px}
 .ev-ghost{opacity:.82;z-index:6;left:1px!important;width:calc(100% - 2px)!important;pointer-events:none;box-shadow:var(--shadow);outline:2px solid var(--fg);outline-offset:-1px}
 .ev-ghost.conflict{outline:2px dashed #D50000}
+.ev.draft{left:1px;right:1px;background:var(--accent-soft);border:2px solid var(--accent);color:var(--accent);z-index:5;touch-action:none;overflow:visible;box-shadow:0 6px 18px rgba(26,115,232,.25);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
+.ev.draft small{font-size:11px;opacity:.8;margin-top:2px}
+.ev.draft.creating small{display:none}
+.draft-handle{position:absolute;left:0;right:0;bottom:-11px;height:22px;touch-action:none;cursor:ns-resize;z-index:6}
+.draft-handle::after{content:"";position:absolute;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:var(--bg);border:2px solid var(--accent)}
 .ev-ghost{transition:top .12s cubic-bezier(.2,.8,.2,1),height .12s}
 .ev-ghost.tick{animation:ghostTick .2s ease}
 @keyframes ghostTick{0%{transform:scale(1)}40%{transform:scale(1.035)}100%{transform:scale(1)}}
@@ -468,7 +473,7 @@ function gridHTML(dates){
   let h='';
   for(let i=0;i<24;i++)h+=`<div class="hline" style="top:${i*H}px"></div>${i?`<div class="hlabel" style="top:${i*H}px">${pad(i)}:00</div>`:''}`;
   const t=today();
-  const cols=dates.map(d=>`<div class="col" data-col="${d}">${layout(evsOn(d).filter(e=>!e.allDay)).map(x=>evTile(x,d)).join('')}${d===t?`<div class="now" id="nowLine" style="top:${nowMin()/60*H}px"></div>`:''}</div>`).join('');
+  const cols=dates.map(d=>`<div class="col" data-col="${d}">${layout(evsOn(d).filter(e=>!e.allDay)).map(x=>evTile(x,d)).join('')}${draftHTML(d)}${d===t?`<div class="now" id="nowLine" style="top:${nowMin()/60*H}px"></div>`:''}</div>`).join('');
   return `<div class="grid-scroll" id="gridScroll"><div class="grid" style="height:${24*H}px">${h}<div class="cols" style="grid-template-columns:repeat(${dates.length},1fr)">${cols}</div></div></div>`;
 }
 function alldayHTML(dates){
@@ -649,6 +654,7 @@ $('#tabbar').addEventListener('click',e=>{const b=e.target.closest('[data-tab]')
 let suppressUntil=0;
 calPane.addEventListener('click',e=>{
   if(Date.now()<suppressUntil)return;
+  if(e.target.closest('[data-draft]')){openDraft();return}
   const evEl=e.target.closest('[data-ev]');if(evEl){openEvent(S.events.find(x=>x.id===evEl.dataset.ev));return}
   const a=e.target.closest('[data-act]');
   if(a){const act=a.dataset.act;
@@ -663,7 +669,8 @@ calPane.addEventListener('click',e=>{
     else if(act==='settings')openSettings();
     return}
   const col=e.target.closest('[data-col]');
-  if(col){const y=e.clientY-col.getBoundingClientRect().top;const m=Math.floor(y/H*2)*30;openEvent(null,col.dataset.col,m)}
+  if(col){if(UI.draft){UI.draft=null;renderCal();return}
+    const s=Math.max(0,Math.min(Math.floor(minAt(col,e.clientY)/30)*30,24*60-60));UI.draft={date:col.dataset.col,s,e:s+60};haptic();renderCal()}
 });
 taskPane.addEventListener('click',e=>{
   if(Date.now()<suppressUntil)return;
@@ -686,8 +693,12 @@ app.addEventListener('pointerdown',e=>{
   let mode='pane';if(row&&!e.target.closest('button'))mode='row';else if(strip)mode='strip';
   G={x:e.clientX,y:e.clientY,mode,row,strip,active:false,dx:0,id:e.pointerId};
   if(mode==='row'&&!row.classList.contains('done')){const g=G;g.lp=setTimeout(()=>startDrag(g,e.pointerId),380)}
-  const evEl=mode==='pane'&&e.target.closest('#calPane [data-ev],#calPane [data-mev]');
-  if(evEl){G.evEl=evEl;G.ptype=e.pointerType;if(e.pointerType!=='mouse'){const g=G;g.lp=setTimeout(()=>startEvDrag(g,g.x,g.y,e.pointerId),420)}}
+  const handle=mode==='pane'&&e.target.closest('#calPane .draft-handle');
+  if(handle){G.evEl=handle.closest('[data-draft]');G.mode='resize-pending';G.ptype=e.pointerType;return}
+  const evEl=mode==='pane'&&e.target.closest('#calPane [data-ev],#calPane [data-mev],#calPane [data-draft]');
+  if(evEl){G.evEl=evEl;G.isDraft=!!evEl.dataset.draft;G.ptype=e.pointerType;if(e.pointerType!=='mouse'&&!G.isDraft){const g=G;g.lp=setTimeout(()=>startEvDrag(g,g.x,g.y,e.pointerId),420)}return}
+  const colEl=mode==='pane'&&e.target.closest('#gridScroll [data-col]');
+  if(colEl){G.colEl=colEl;G.ptype=e.pointerType;if(e.pointerType!=='mouse'){const g=G;g.lp=setTimeout(()=>startShape(g,'create',e.pointerId),420)}}
 });
 function startDrag(g,pid){
   if(G!==g||g.active||g.mode!=='row')return;
@@ -713,12 +724,15 @@ function finishDrag(g,cancel){
   if(!cancel&&g.n!==g.i0){const[m]=ids.splice(g.i0,1);ids.splice(g.n,0,m);ids.forEach((id,i)=>{const k=taskById(id);if(k)k.order=i});save()}
   renderTasks();
 }
-app.addEventListener('touchmove',e=>{if(G&&(G.mode==='drag'||G.mode==='evdrag'))e.preventDefault()},{passive:false});
+app.addEventListener('touchmove',e=>{if(G&&['drag','evdrag','create','resize','resize-pending'].includes(G.mode))e.preventDefault()},{passive:false});
 app.addEventListener('pointermove',e=>{
   if(!G||e.pointerId!==G.id)return;const dx=e.clientX-G.x,dy=e.clientY-G.y;
   if(G.mode==='drag'){moveDrag(G,e.clientY);return}
   if(G.mode==='evdrag'){G.lx=e.clientX;G.ly=e.clientY;moveEvDrag(G);return}
-  if(G.evEl&&G.ptype==='mouse'&&!G.active&&Math.hypot(dx,dy)>5){startEvDrag(G,G.x,G.y,e.pointerId);if(G&&G.mode==='evdrag'){G.lx=e.clientX;G.ly=e.clientY;moveEvDrag(G)}return}
+  if(G.mode==='create'||G.mode==='resize'){G.lx=e.clientX;G.ly=e.clientY;G.dragged=true;moveShape(G);return}
+  if(G.mode==='resize-pending'){if(Math.hypot(dx,dy)>3){G.lx=e.clientX;G.ly=e.clientY;G.dragged=true;startShape(G,'resize',e.pointerId)}return}
+  if(G.colEl&&G.ptype==='mouse'&&!G.active&&Math.abs(dy)>6&&Math.abs(dy)>Math.abs(dx)){G.lx=e.clientX;G.ly=e.clientY;G.dragged=true;startShape(G,'create',e.pointerId);return}
+  if(G.evEl&&(G.ptype==='mouse'||G.isDraft)&&!G.active&&Math.hypot(dx,dy)>5){startEvDrag(G,G.x,G.y,e.pointerId);if(G&&G.mode==='evdrag'){G.lx=e.clientX;G.ly=e.clientY;moveEvDrag(G)}return}
   if(Math.abs(dx)>8||Math.abs(dy)>8)clearTimeout(G.lp);
   if(!G.active){
     if(Math.abs(dx)>10&&Math.abs(dx)>Math.abs(dy)*1.2){G.active=true;
@@ -738,6 +752,8 @@ function endGesture(cancel){
   if(!G)return;const g=G;G=null;clearTimeout(g.lp);
   if(g.mode==='drag'){finishDrag(g,cancel);return}
   if(g.mode==='evdrag'){endEvDrag(g,cancel);return}
+  if(g.mode==='create'||g.mode==='resize'){endShape(g,cancel);return}
+  if(g.mode==='resize-pending')return;
   if(!g.active)return;
   suppressUntil=Date.now()+350;const dx=cancel?0:g.dx;
   if(g.mode==='pane'){if(UI.pane===0&&dx<-60)setPane(1);else if(UI.pane===1&&dx>60)setPane(0);else setPane(UI.pane)}
@@ -755,6 +771,45 @@ app.addEventListener('pointercancel',()=>endGesture(true));
 /* ---------- moving meetings by drag ----------
    mouse: press + move >5px; touch: long press 420ms, then move. Snap 15 min, duration kept. */
 const SNAP=15;
+/* ---------- new meeting: place a draft block in the grid first, then fill it in ---------- */
+function draftHTML(d){const D=UI.draft;if(!D||D.date!==d)return'';
+  return `<div class="ev draft" data-draft="1" style="top:${D.s/60*H}px;height:${(D.e-D.s)/60*H-1}px"><b>Без названия</b><span>${fromMin(D.s)}–${D.e>=1440?'23:59':fromMin(D.e)}</span><small>Нажмите, чтобы заполнить</small><i class="draft-handle" aria-label="Потяните, чтобы изменить длительность"></i></div>`}
+const draftEv=()=>{const D=UI.draft;return{id:'__draft',title:'Без названия',date:D.date,start:fromMin(D.s),end:D.e>=1440?'23:59':fromMin(D.e),color:'peacock',allDay:false}};
+function openDraft(){const D=UI.draft;if(D)openEvent(null,D.date,D.s,D.e)}
+const minAt=(col,y)=>(y-col.getBoundingClientRect().top)/H*60;
+const durTxt=d=>d>=60?Math.floor(d/60)+' ч'+(d%60?' '+d%60+' мин':''):d+' мин';
+function startShape(g,kind,pid){            // 'resize' = stretch the draft, 'create' = draw a new range
+  if(G!==g)return;g.mode=kind;g.col=kind==='resize'?g.evEl.closest('[data-col]'):g.colEl;if(!g.col)return;
+  g.col.closest('.grid').classList.add('dragging');
+  if(kind==='create'){g.a=Math.max(0,Math.min(24*60-SNAP,Math.floor(minAt(g.col,g.y)/SNAP)*SNAP));
+    g.el=document.createElement('div');g.el.className='ev draft creating';g.el.innerHTML='<b>Новая встреча</b><span></span>';g.col.appendChild(g.el)}
+  else g.el=g.evEl;
+  g.tip=document.createElement('div');g.tip.className='drag-tip';app.appendChild(g.tip);
+  suppressUntil=Date.now()+600000;try{app.setPointerCapture(pid)}catch(_){}haptic();
+  g.lx=g.lx??g.x;g.ly=g.ly??g.y;moveShape(g);
+  const loop=()=>{if(G!==g)return;const gs=$('#gridScroll');if(gs){const r=gs.getBoundingClientRect();let v=0;
+    if(g.ly<r.top+48)v=-Math.ceil((r.top+48-g.ly)/6);else if(g.ly>r.bottom-48)v=Math.ceil((g.ly-r.bottom+48)/6);
+    if(v){const b=gs.scrollTop;gs.scrollTop+=Math.max(-14,Math.min(14,v));if(gs.scrollTop!==b)moveShape(g)}}g.raf=requestAnimationFrame(loop)};
+  g.raf=requestAnimationFrame(loop);
+}
+function moveShape(g){
+  const m=minAt(g.col,g.ly);let s,e;
+  if(g.mode==='resize'){s=UI.draft.s;e=Math.max(s+SNAP,Math.min(24*60,Math.round(m/SNAP)*SNAP))}
+  else{const c=Math.max(0,Math.min(24*60,m));if(c>=g.a){s=g.a;e=Math.max(g.a+SNAP,Math.min(24*60,Math.round(c/SNAP)*SNAP))}else{s=Math.max(0,Math.floor(c/SNAP)*SNAP);e=g.a+SNAP}}
+  if(s!==g.s||e!==g.e){if(g.s!=null)haptic();g.s=s;g.e=e;
+    g.el.style.top=(s/60*H)+'px';g.el.style.height=((e-s)/60*H-1)+'px';
+    const txt=`${fromMin(s)}–${e>=1440?'23:59':fromMin(e)}`;const sp=g.el.querySelector('span');if(sp)sp.textContent=txt;
+    g.tip.textContent=`${txt} · ${durTxt(e-s)}`}
+  const ar=app.getBoundingClientRect();g.tip.style.left=Math.max(ar.left+100,Math.min(g.lx,ar.right-100))+'px';g.tip.style.top=Math.max(ar.top+40,g.ly-28)+'px';
+}
+function endShape(g,cancel){
+  cancelAnimationFrame(g.raf);g.tip&&g.tip.remove();document.querySelectorAll('.grid.dragging').forEach(x=>x.classList.remove('dragging'));
+  suppressUntil=Date.now()+350;
+  if(g.mode==='create'){g.el.remove();if(!cancel&&g.s!=null){let e=g.e;if(!g.dragged&&e-g.s<=SNAP)e=Math.min(24*60,g.s+60);UI.draft={date:g.col.dataset.col,s:g.s,e}}}
+  else if(!cancel&&g.e!=null&&UI.draft)UI.draft.e=g.e;
+  renderCal();
+}
+
 /* haptic tick: iOS 18+ gives a light tap when a native switch toggles; Android uses vibrate */
 let hapLabel=null;
 function haptic(){
@@ -768,7 +823,7 @@ const evDur=ev=>{const s=toMin(ev.start);let e=toMin(ev.end);if(e<=s)e=s+30;retu
 const shortDate=d=>`${WD[wdi(d)]}, ${parse(d).getDate()} ${MONTHS_G[parse(d).getMonth()]}`;
 function startEvDrag(g,x,y,pid){
   if(G!==g||g.active||g.mode==='evdrag')return;
-  const id=g.evEl.dataset.ev||g.evEl.dataset.mev,ev=evById(id);if(!ev)return;
+  const ev=g.evEl.dataset.draft?(UI.draft&&draftEv()):evById(g.evEl.dataset.ev||g.evEl.dataset.mev);if(!ev)return;g.isDraft=!!g.evEl.dataset.draft;
   g.mode='evdrag';g.ev=ev;g.lx=x;g.ly=y;g.target=null;
   g.kind=g.evEl.dataset.mev?'month':ev.allDay?'allday':'timed';
   g.dur=evDur(ev);
@@ -840,6 +895,7 @@ function endEvDrag(g,cancel){
   suppressUntil=Date.now()+350;
   const t=g.target;
   if(cancel||!t){if(!cancel)toast('Перенос отменён');return}
+  if(g.isDraft){const s=toMin(t.start);UI.draft={date:t.date,s,e:Math.min(24*60,s+g.dur)};renderCal();return}
   moveEvent(g.ev,g.kind==='timed'?{date:t.date,start:t.start,end:t.end}:{date:t.date});
 }
 function moveEvent(ev,to){
@@ -859,7 +915,10 @@ function moveEvent(ev,to){
     renderCal();checkReminders();
   });
 }
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&G&&G.mode==='evdrag'){const g=G;G=null;endEvDrag(g,true);toast('Перенос отменён')}});
+document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
+  if(G&&G.mode==='evdrag'){const g=G;G=null;endEvDrag(g,true);toast('Перенос отменён');return}
+  if(G&&(G.mode==='create'||G.mode==='resize')){const g=G;G=null;endShape(g,true);return}
+  if(UI.draft&&wrap.hidden){UI.draft=null;renderCal()}});
 
 
 /* ---------- sheets ---------- */
@@ -868,9 +927,9 @@ function openSheet(html){sheet.innerHTML=html;wrap.hidden=false;sheet.scrollTop=
 function closeSheet(){wrap.hidden=true;sheet.innerHTML=''}
 $('#scrim').addEventListener('click',closeSheet);
 
-function openEvent(ev,date,startMin){
+function openEvent(ev,date,startMin,endMin){
   const isNew=!ev;
-  const e=ev?{...ev}:{id:uid(),title:'',date:date||UI.calDate,start:fromMin(startMin??600),end:fromMin(Math.min((startMin??600)+60,24*60-1)),allDay:false,color:'peacock',remind:15,remind2:false,place:'',desc:''};
+  const e=ev?{...ev}:{id:uid(),title:'',date:date||UI.calDate,start:fromMin(startMin??600),end:fromMin(Math.min(endMin??((startMin??600)+60),24*60-1)),allDay:false,color:'peacock',remind:15,remind2:false,place:'',desc:''};
   openSheet(`<div class="sheet-head"><button data-s="cancel">Отмена</button><b>${isNew?'Новая встреча':'Встреча'}</b><button class="r" data-s="save">Готово</button></div>
   <input class="big-input" id="evTitle" placeholder="Название" value="${esc(e.title)}" autocomplete="off">
   <div class="fg">
@@ -904,7 +963,7 @@ function openEvent(ev,date,startMin){
       if(toMin(e.end)<=toMin(e.start))e.end=fromMin(toMin(e.start)+30);
       e.remind=+$('#evRem').value;e.remind2=e.remind>5&&$('#evRem2').checked;e.place=$('#evPlace').value.trim();e.desc=$('#evDesc').value.trim();
       const i=S.events.findIndex(z=>z.id===e.id);if(i<0)S.events.push(e);else S.events[i]=e;
-      save();closeSheet();UI.calDate=e.date;renderCal();checkReminders();
+      if(isNew)UI.draft=null;save();closeSheet();UI.calDate=e.date;renderCal();checkReminders();
     }
   };
 }
