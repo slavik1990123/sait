@@ -978,7 +978,7 @@ function reconcileRems(){
   S.events.forEach(ev=>{
     if(ev.allDay||ev.remind<0)return;
     const k=remKey(ev),st=evStartMs(ev);
-    if(!R[k]&&now>=st-ev.remind*60000&&now<st){R[k]={evId:ev.id,state:'pending',since:now,pings:0,lastPing:0};ch=true}
+    if(!R[k]&&now>=st-ev.remind*60000&&(now<st||(ev.remind===0&&now<st+60000))){R[k]={evId:ev.id,state:'pending',since:now,pings:0,lastPing:0};ch=true}
   });
   for(const k in R){const r=R[k];
     if(r.state==='snoozed'&&now>=r.until){const ev=evById(r.evId);
