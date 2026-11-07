@@ -65,7 +65,7 @@ input,textarea,select{font:inherit;font-size:16px;color:var(--fg)}
 .icon-btn:active{background:var(--surface2)}
 .icon-btn svg{width:22px;height:22px}
 .today-btn{width:32px;height:32px;border:1.5px solid var(--muted);border-radius:8px;display:grid;place-items:center;font-size:13px;font-weight:600;color:var(--muted);margin:0 4px}
-.seg{display:grid;grid-template-columns:repeat(2,1fr);background:var(--surface);border-radius:10px;padding:3px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface);border-radius:10px;padding:3px}
 .seg button{padding:7px 0;border-radius:8px;font-size:14px;font-weight:500;color:var(--muted)}
 .seg button[aria-selected="true"]{background:var(--bg);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}
 
@@ -243,6 +243,11 @@ input,textarea,select{font:inherit;font-size:16px;color:var(--fg)}
 .ev.drag-src,.chip.drag-src{opacity:.35;outline:2px dashed var(--fg);outline-offset:-2px}
 .ev-ghost{opacity:.82;z-index:6;left:1px!important;width:calc(100% - 2px)!important;pointer-events:none;box-shadow:var(--shadow);outline:2px solid var(--fg);outline-offset:-1px}
 .ev-ghost.conflict{outline:2px dashed #D50000}
+.ev-ghost{transition:top .12s cubic-bezier(.2,.8,.2,1),height .12s}
+.ev-ghost.tick{animation:ghostTick .2s ease}
+@keyframes ghostTick{0%{transform:scale(1)}40%{transform:scale(1.035)}100%{transform:scale(1)}}
+.grid.dragging .col{background-image:repeating-linear-gradient(to bottom,transparent 0,transparent 13px,var(--accent-soft) 13px,var(--accent-soft) 14px)}
+.drop-time{position:absolute;left:2px;width:43px;transform:translateY(-50%);background:var(--accent);color:var(--accent-fg);font-size:11px;font-weight:700;text-align:center;border-radius:6px;padding:2px 0;z-index:7;pointer-events:none;transition:top .12s cubic-bezier(.2,.8,.2,1);font-variant-numeric:tabular-nums;box-shadow:0 2px 6px rgba(0,0,0,.18)}
 .drag-float{position:fixed;z-index:58;pointer-events:none;transform:translate(-50%,-100%);max-width:200px;font-size:13px;padding:6px 10px;border-radius:8px;box-shadow:var(--shadow);opacity:.9}
 .drag-float.off{opacity:.35}
 .drag-tip{position:fixed;z-index:59;pointer-events:none;transform:translate(-50%,-100%);background:var(--fg);color:var(--bg);font-size:13px;font-weight:600;padding:6px 11px;border-radius:10px;box-shadow:var(--shadow);white-space:nowrap;text-align:center;font-variant-numeric:tabular-nums}
@@ -423,7 +428,7 @@ function rawSave(){if(window.__failSave)return false;if(!STORAGE_OK)return true;
 function save(){const ok=rawSave();if(ok)try{schedulePushSync()}catch(_){}return ok}
 S=load();
 
-const UI={pane:0,view:'3day',calDate:today(),taskDate:today(),scrolled:false};
+const UI={pane:0,view:'1day',calDate:today(),taskDate:today(),scrolled:false};
 
 /* carry-over: unfinished tasks from past days move to today */
 function carryOver(){
@@ -481,18 +486,20 @@ function renderCal(){
   const prev=$('#gridScroll');const keep=prev?prev.scrollTop:null;
   const d=parse(UI.calDate),v=UI.view;
   let body='';
-  if(v==='3day'){
+  if(v==='1day'){
+    body=alldayHTML([UI.calDate])+gridHTML([UI.calDate]);
+  } else if(v==='3day'){
     const dates=[0,1,2].map(i=>addDays(UI.calDate,i)),t=today();
     body=`<div class="dayheads"><div class="sp"></div><div class="cells" style="grid-template-columns:repeat(3,1fr)">${dates.map(x=>`<button data-act="pick" data-date="${x}" class="${x===t?'is-today':''}"><span class="wd">${WD[wdi(x)]}</span><span class="dn">${parse(x).getDate()}</span></button>`).join('')}</div></div>`+alldayHTML(dates)+`<div class="three" style="display:contents">${gridHTML(dates)}</div>`;
   } else body=monthHTML();
-  const sub=v==='3day'?rangeLabel(UI.calDate,addDays(UI.calDate,2)):'';
+  const sub=v==='1day'?`${dayLabel(UI.calDate)}, ${dateLong(UI.calDate)}`:v==='3day'?rangeLabel(UI.calDate,addDays(UI.calDate,2)):'';
   calPane.innerHTML=`<header class="head">
     <div class="row1"><div><div class="h-title">${MONTHS[d.getMonth()]} <span>${d.getFullYear()}</span></div>${sub?`<div class="h-sub">${sub}</div>`:''}</div><div class="spacer"></div>
       <button class="icon-btn" data-act="prev" aria-label="Назад">${icon.prev}</button><button class="icon-btn" data-act="next" aria-label="Вперёд">${icon.next}</button>
       <button class="today-btn" data-act="today" aria-label="Сегодня">${new Date().getDate()}</button>
       <button class="icon-btn" data-act="settings" aria-label="Настройки">${icon.gear}</button></div>
-    <div class="seg" role="tablist">${[['3day','3 дня'],['month','Месяц']].map(([k,l])=>`<button role="tab" data-act="view" data-view="${k}" aria-selected="${v===k}">${l}</button>`).join('')}</div>
-    ${v==='day'?stripHTML(UI.calDate,'cal'):''}
+    <div class="seg" role="tablist">${[['1day','1 день'],['3day','3 дня'],['month','Месяц']].map(([k,l])=>`<button role="tab" data-act="view" data-view="${k}" aria-selected="${v===k}">${l}</button>`).join('')}</div>
+    ${v==='1day'?stripHTML(UI.calDate,'cal'):''}
   </header>${body}`;
   const g=$('#gridScroll');
   if(g){if(keep!=null&&UI.scrolled)g.scrollTop=keep;else{g.scrollTop=Math.max(0,(Math.min(nowMin(),20*60)/60-1.5)*H);UI.scrolled=true}}
@@ -645,11 +652,12 @@ calPane.addEventListener('click',e=>{
   if(a){const act=a.dataset.act;
     if(act==='view'){UI.view=a.dataset.view;renderCal()}
     else if(act==='prev'||act==='next'){const s=act==='prev'?-1:1;
-      if(UI.view==='3day')UI.calDate=addDays(UI.calDate,3*s);
+      if(UI.view==='1day')UI.calDate=addDays(UI.calDate,s);
+      else if(UI.view==='3day')UI.calDate=addDays(UI.calDate,3*s);
       else{const d=parse(UI.calDate);UI.calDate=ymd(new Date(d.getFullYear(),d.getMonth()+s,1))}
       renderCal()}
     else if(act==='today'){UI.calDate=today();UI.scrolled=false;renderCal()}
-    else if(act==='pick'){UI.calDate=a.dataset.date;UI.view='3day';renderCal()}
+    else if(act==='pick'){UI.calDate=a.dataset.date;if(UI.view==='month')UI.view='1day';renderCal()}
     else if(act==='settings')openSettings();
     return}
   const col=e.target.closest('[data-col]');
@@ -753,7 +761,8 @@ function startEvDrag(g,x,y,pid){
   g.mode='evdrag';g.ev=ev;g.lx=x;g.ly=y;g.target=null;
   g.kind=g.evEl.dataset.mev?'month':ev.allDay?'allday':'timed';
   g.dur=evDur(ev);
-  if(g.kind==='timed'){const r=g.evEl.closest('[data-col]').getBoundingClientRect();g.grab=(y-r.top)/H*60-toMin(ev.start)}
+  if(g.kind==='timed'){const r=g.evEl.closest('[data-col]').getBoundingClientRect();g.grab=(y-r.top)/H*60-toMin(ev.start);
+    const gr=g.evEl.closest('.grid');gr.classList.add('dragging');g.pill=document.createElement('div');g.pill.className='drop-time';g.pill.hidden=true;gr.appendChild(g.pill)}
   g.evEl.classList.add('drag-src');
   const c=colorOf(ev.color);
   const gh=document.createElement('div');
@@ -793,15 +802,19 @@ function moveEvDrag(g){
         let s=Math.round(((g.ly-r.top)/H*60-g.grab)/SNAP)*SNAP;s=Math.max(0,Math.min(s,24*60-g.dur));
         const e=s+g.dur,st=fromMin(s),en=e>=24*60?'23:59':fromMin(e);
         g.target={date:d,start:st,end:en};
-        if(g.ghost.parentNode!==col)col.appendChild(g.ghost);
+        if(g.ghost.parentNode!==col){col.appendChild(g.ghost);g.ghost.style.transition='none';g.ghost.style.top=(s/60*H)+'px';void g.ghost.offsetWidth;g.ghost.style.transition=''}
         g.ghost.style.top=(s/60*H)+'px';g.ghost.style.height=(g.dur/60*H-1)+'px';
+        if(g.lastS!==s||g.lastD!==d){
+          if(g.lastS!=null){g.ghost.classList.remove('tick');void g.ghost.offsetWidth;g.ghost.classList.add('tick');try{navigator.vibrate&&navigator.vibrate(4)}catch(_){}}
+          g.lastS=s;g.lastD=d;g.pill.textContent=st;g.pill.style.top=(s/60*H)+'px'}
+        g.pill.hidden=false;
         label=`${shortDate(d)} · ${st}–${en}`;
         const hit=evsOn(d).find(o=>o.id!==ev.id&&!o.allDay&&toMin(o.start)<e&&Math.max(toMin(o.end),toMin(o.start)+15)>s);
         if(hit)warn=`Пересекается с «${hit.title}»`;
         g.ghost.classList.toggle('conflict',!!hit)}
     }
   }
-  if(g.kind==='timed')g.ghost.hidden=!valid;else g.ghost.classList.toggle('off',!valid);
+  if(g.kind==='timed'){g.ghost.hidden=!valid;if(!valid&&g.pill)g.pill.hidden=true}else g.ghost.classList.toggle('off',!valid);
   if(!valid)g.target=null;
   g.tip.innerHTML=valid?`${esc(label)}${warn?`<small>${esc(warn)}</small>`:''}`:'Отпустите — перенос отменится';
   g.tip.classList.toggle('warn',!valid);
@@ -811,7 +824,8 @@ function moveEvDrag(g){
 }
 function endEvDrag(g,cancel){
   cancelAnimationFrame(g.raf);clearDropMarks();
-  g.ghost&&g.ghost.remove();g.tip&&g.tip.remove();g.evEl&&g.evEl.classList.remove('drag-src');
+  g.ghost&&g.ghost.remove();g.tip&&g.tip.remove();g.pill&&g.pill.remove();g.evEl&&g.evEl.classList.remove('drag-src');
+  document.querySelectorAll('.grid.dragging').forEach(x=>x.classList.remove('dragging'));
   suppressUntil=Date.now()+350;
   const t=g.target;
   if(cancel||!t){if(!cancel)toast('Перенос отменён');return}
@@ -1034,7 +1048,7 @@ $('#remStack').addEventListener('click',e=>{
     save();closeSystemNote(k);card.classList.add('leaving');setTimeout(renderRems,180);
     if(b.dataset.ra==='snooze'){const d=new Date(now+REM_CFG.snoozeMin*60000);toast(`Напомню ещё раз в ${pad(d.getHours())}:${pad(d.getMinutes())}`)}
     return}
-  if(e.target.closest('[data-open]')){const ev=evById(r.evId);if(ev){setPane(0);UI.view='3day';UI.calDate=ev.date;renderCal();openEvent(ev)}}
+  if(e.target.closest('[data-open]')){const ev=evById(r.evId);if(ev){setPane(0);if(UI.view==='month')UI.view='1day';UI.calDate=ev.date;renderCal();openEvent(ev)}}
 });
 function focusRem(k){renderRems();const el=$('#remStack').querySelector(`[data-rem="${CSS.escape(k)}"]`);if(el){el.classList.remove('ping');void el.offsetWidth;el.classList.add('ping')}}
 
