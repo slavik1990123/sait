@@ -214,7 +214,7 @@ input,textarea,select{font:inherit;font-size:16px;color:var(--fg)}
 .bn-app{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 .bn-title{font-weight:600;margin-top:1px}
 .bn-sub{font-size:13px;color:var(--muted);margin-top:1px}
-.toast{position:absolute;left:16px;right:16px;bottom:72px;z-index:30;background:var(--fg);color:var(--bg);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;font-size:14px;box-shadow:var(--shadow)}
+.toast{position:absolute;left:16px;right:16px;bottom:72px;z-index:70;background:var(--fg);color:var(--bg);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;font-size:14px;box-shadow:var(--shadow)}
 .toast span{flex:1}
 .toast button{color:var(--accent);font-weight:700;filter:brightness(1.3)}
 
@@ -282,8 +282,10 @@ input,textarea,select{font:inherit;font-size:16px;color:var(--fg)}
 .wide-btn{width:100%;padding:13px;border-radius:12px;background:var(--bg);font-weight:600;color:var(--accent);margin-bottom:10px}
 .wide-btn.danger{color:var(--danger)}
 .note{font-size:13px;color:var(--muted);line-height:1.45;padding:2px 4px 12px}
-.pk-status{font-weight:600;color:var(--ok)}
+.pk-status{font-weight:600}
+.pk-status.ok{color:var(--ok)}
 .pk-status.err{color:var(--danger)}
+.wide-btn.attn{background:var(--accent);color:var(--accent-fg)}
 .sheet h4{margin:14px 4px 8px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
 .sheet textarea.json{width:100%;min-height:90px;border:0;border-radius:12px;background:var(--bg);padding:12px;font-family:ui-monospace,Menlo,monospace;font-size:12px!important;margin-bottom:10px}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
@@ -904,7 +906,11 @@ function openSettings(){
   <h4>Прототип</h4>
   <button class="wide-btn" data-s="reset">Загрузить демо-данные</button>
   <button class="wide-btn danger" data-s="clear">Очистить все данные</button>`);
-  const lv=$('#pkLevel');if(lv)lv.onchange=()=>{$('#pkLevelNote').textContent=(BARK_LEVELS.find(x=>x[0]===lv.value)||BARK_LEVELS[0])[1]};
+  const pkDirty=msg=>{const sb=sheet.querySelector('[data-s="pk-save"]');if(sb)sb.classList.add('attn');toast(msg+'. Нажмите «Сохранить и подключить»','Сохранить',()=>pushSettingsAction('pk-save'))};
+  const lv=$('#pkLevel');if(lv)lv.onchange=()=>{$('#pkLevelNote').textContent=(BARK_LEVELS.find(x=>x[0]===lv.value)||BARK_LEVELS[0])[1];pkDirty('Важность изменена')};
+  const snd=$('#pkSound');if(snd)snd.onchange=()=>pkDirty('Звук изменён');
+  const cl=$('#pkCall');if(cl)cl.onchange=()=>pkDirty(cl.checked?'Звонок 30 секунд включён':'Звонок 30 секунд выключен');
+  const ek=$('#pkEnc');if(ek)ek.oninput=()=>{const sb=sheet.querySelector('[data-s="pk-save"]');if(sb)sb.classList.add('attn')};
   sheet.onclick=async x=>{
     const b=x.target.closest('[data-s]');if(!b)return;const s=b.dataset.s;
     if(s.startsWith('pk-')){await pushSettingsAction(s);return}
@@ -1099,7 +1105,8 @@ function pushStatusText(){
   if(p.lastSync){const d=new Date(p.lastSync);return`Подключено · расписание отправлено в ${pad(d.getHours())}:${pad(d.getMinutes())}`}
   return'Подключено · отправляю расписание…';
 }
-function renderPushStatus(){const el=document.getElementById('pkStatus');if(el){el.textContent=pushStatusText();el.classList.toggle('err',!!(S.push&&S.push.lastErr))}}
+const pushOk=()=>!!(PUSH_API&&S.push&&S.push.bark&&S.push.lastSync&&!S.push.lastErr);
+function renderPushStatus(){const el=document.getElementById('pkStatus');if(el){el.textContent=pushStatusText();el.classList.toggle('err',!!(S.push&&S.push.lastErr));el.classList.toggle('ok',pushOk())}}
 function pushSettingsHTML(){
   const p=pushCfg();
   return `<h4>Уведомления на заблокированный экран</h4>
@@ -1116,18 +1123,19 @@ function pushSettingsHTML(){
   <button class="wide-btn" data-s="pk-gen">Создать ключ шифрования</button>
   <button class="wide-btn" data-s="pk-save">Сохранить и подключить</button>
   <button class="wide-btn" data-s="pk-test">Проверить — прислать тестовое уведомление</button>
-  <p class="note pk-status" id="pkStatus">${esc(pushStatusText())}</p>
+  <p class="note pk-status${pushOk()?' ok':''}" id="pkStatus">${esc(pushStatusText())}</p>
   ${p.bark?`<button class="wide-btn danger" data-s="pk-off">Отключить уведомления на экран блокировки</button>`:''}`;
 }
 async function pushSettingsAction(s){
   const p=pushCfg();
+  if(!$('#pkBark'))return false;
   const readForm=()=>{p.bark=($('#pkBark').value||'').trim();p.sound=$('#pkSound').value;p.level=$('#pkLevel').value;p.call=$('#pkCall').checked;p.enc=($('#pkEnc').value||'').trim()};
   if(s==='pk-gen'){const a=new Uint8Array(16);crypto.getRandomValues(a);$('#pkEnc').value=[...a].map(b=>'abcdefghjkmnpqrstuvwxyz23456789'[b%31]).join('');toast('Ключ создан. Введите его в Bark и нажмите «Сохранить»');return true}
   if(s==='pk-save'){readForm();
     if(p.enc&&p.enc.length!==16){toast('Ключ шифрования должен быть ровно 16 символов');return true}
     if(!p.bark){toast('Вставьте ключ из Bark');return true}
     if(!PUSH_API){rawSave();toast('Сохранено. Сервер напоминаний пока не подключён');return true}
-    rawSave();await pushSync(true);toast(S.push.lastErr?'Не удалось связаться с сервером':'Подключено. Напоминания придут на экран блокировки');return true}
+    rawSave();await pushSync(true);if(!S.push.lastErr){const sb=document.querySelector('[data-s="pk-save"]');if(sb)sb.classList.remove('attn')}toast(S.push.lastErr?'Не удалось связаться с сервером':'Подключено. Напоминания придут на экран блокировки');return true}
   if(s==='pk-test'){readForm();if(!p.bark){toast('Вставьте ключ из Bark');return true}
     if(!PUSH_API){toast('Сервер напоминаний пока не подключён');return true}
     try{const r=await fetch(PUSH_API+'/test',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({uid:p.uid,bark:p.bark,sound:p.sound,level:p.level,call:!!p.call,enc:p.enc&&p.enc.length===16?p.enc:'',url:location.href.split('#')[0]})});
