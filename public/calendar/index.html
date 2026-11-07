@@ -283,6 +283,13 @@ input,textarea,select{font:inherit;font-size:16px;color:var(--fg)}
 .wide-btn.danger{color:var(--danger)}
 .note{font-size:13px;color:var(--muted);line-height:1.45;padding:2px 4px 12px}
 .pk-status{font-weight:600}
+.pk-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pk-ind{display:inline-flex;align-items:center;gap:6px;flex:none;text-transform:none;letter-spacing:0;font-size:13px;font-weight:700;padding:4px 10px;border-radius:20px}
+.pk-ind i{width:9px;height:9px;border-radius:50%}
+.pk-ind.on{color:var(--ok);background:rgba(30,142,62,.13)}
+.pk-ind.on i{background:#1e8e3e;box-shadow:0 0 0 3px rgba(30,142,62,.25)}
+.pk-ind.off{color:var(--danger);background:rgba(217,48,37,.11)}
+.pk-ind.off i{background:#d93025}
 .snd-pick{display:flex;align-items:center;gap:8px}
 .snd-pick select{max-width:46vw}
 .pk-status.ok{color:var(--ok)}
@@ -922,6 +929,7 @@ function openSettings(){
   <h4>Прототип</h4>
   <button class="wide-btn" data-s="reset">Загрузить демо-данные</button>
   <button class="wide-btn danger" data-s="clear">Очистить все данные</button>`);
+  if(S.push&&S.push.bark&&S.push.keyOk&&PUSH_API)pushSync(true);
   const pkDirty=msg=>{const sb=sheet.querySelector('[data-s="pk-save"]');if(sb)sb.classList.add('attn');toast(msg+'. Нажмите «Сохранить и подключить»','Сохранить',()=>pushSettingsAction('pk-save'))};
   const lv=$('#pkLevel');if(lv)lv.onchange=()=>{$('#pkLevelNote').textContent=(BARK_LEVELS.find(x=>x[0]===lv.value)||BARK_LEVELS[0])[1];pkDirty('Важность изменена')};
   const snd=$('#pkSound');if(snd)snd.onchange=()=>pkDirty('Звук изменён');
@@ -1145,10 +1153,14 @@ function barkInputProblem(v){
   if(!barkKeyTail(v))return'Не похоже на ключ Bark. Скопируйте ссылку вида https://api.day.app/… кнопкой Copy в Bark';
   return'';
 }
-function renderPushStatus(){const el=document.getElementById('pkStatus');if(el){el.textContent=pushStatusText();el.classList.toggle('err',!!(S.push&&S.push.lastErr));el.classList.toggle('ok',pushOk())}}
+function pushIndHTML(){const on=pushOk();return`<span class="pk-ind ${on?'on':'off'}" id="pkInd" role="status"><i></i>${on?'Активно':'Не активно'}</span>`}
+function renderPushStatus(){
+  const ind=document.getElementById('pkInd');if(ind){const on=pushOk();ind.className='pk-ind '+(on?'on':'off');ind.innerHTML='<i></i>'+(on?'Активно':'Не активно')}
+  const kb=document.querySelector('.key-box');if(kb){const on=pushOk();kb.classList.toggle('ok',on);const l=kb.querySelector('.key-lab');if(l)l.textContent=on?'✓ Ключ Bark принят':'Ключ из Bark'}
+  const el=document.getElementById('pkStatus');if(el){el.textContent=pushStatusText();el.classList.toggle('err',!!(S.push&&S.push.lastErr));el.classList.toggle('ok',pushOk())}}
 function pushSettingsHTML(){
   const p=pushCfg();
-  return `<h4>Уведомления на заблокированный экран</h4>
+  return `<h4 class="pk-h"><span>Уведомления на заблокированный экран</span>${pushIndHTML()}</h4>
   <p class="note">Через бесплатное приложение <b>Bark</b> из App Store. Напоминания придут, даже когда «Календарь» закрыт, и будут повторяться каждые ${REM_CFG.repeatEveryMin} мин (не больше ${REM_CFG.maxRepeats} раз), пока вы не нажмёте «Увидел» здесь.</p>
   <div class="key-box${pushOk()?' ok':''}">
     <label class="key-lab" for="pkBark">${pushOk()?'✓ Ключ Bark принят':'Ключ из Bark'}</label>
