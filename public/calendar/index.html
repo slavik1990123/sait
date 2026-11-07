@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
-<script>window.APP_EMPTY_START=true</script>
+<script>window.APP_EMPTY_START=true;window.KAL_PUSH_API='https://kalendar-push.karuhin.workers.dev'</script>
 <title>Мой календарь</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&display=swap">
@@ -282,6 +282,8 @@ input,textarea,select{font:inherit;font-size:16px;color:var(--fg)}
 .wide-btn{width:100%;padding:13px;border-radius:12px;background:var(--bg);font-weight:600;color:var(--accent);margin-bottom:10px}
 .wide-btn.danger{color:var(--danger)}
 .note{font-size:13px;color:var(--muted);line-height:1.45;padding:2px 4px 12px}
+.pk-status{font-weight:600;color:var(--ok)}
+.pk-status.err{color:var(--danger)}
 .sheet h4{margin:14px 4px 8px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
 .sheet textarea.json{width:100%;min-height:90px;border:0;border-radius:12px;background:var(--bg);padding:12px;font-family:ui-monospace,Menlo,monospace;font-size:12px!important;margin-bottom:10px}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
@@ -392,7 +394,8 @@ function seed(demo=true){
 function load(){try{const r=localStorage.getItem(KEY);if(r){const o=JSON.parse(r);if(o&&o.events&&o.tasks){o.notified=o.notified||{};o.rem=o.rem||{};return o}}}catch(e){}return seed(!window.APP_EMPTY_START)}
 let STORAGE_OK=true;try{localStorage.setItem('__kal_t','1');localStorage.removeItem('__kal_t')}catch(e){STORAGE_OK=false}
 /* returns false when the change could not be written */
-function save(){if(window.__failSave)return false;if(!STORAGE_OK)return true;try{localStorage.setItem(KEY,JSON.stringify(S));return true}catch(e){return false}}
+function rawSave(){if(window.__failSave)return false;if(!STORAGE_OK)return true;try{localStorage.setItem(KEY,JSON.stringify(S));return true}catch(e){return false}}
+function save(){const ok=rawSave();if(ok)try{schedulePushSync()}catch(_){}return ok}
 S=load();
 
 const UI={pane:0,view:'3day',calDate:today(),taskDate:today(),scrolled:false};
@@ -886,9 +889,10 @@ function openSettings(){
   const perm=('Notification' in window)?Notification.permission:'unsupported';
   openSheet(`<div class="sheet-head"><span style="min-width:64px"></span><b>Настройки</b><button class="r" data-s="cancel">Готово</button></div>
   <h4>Напоминания о встречах</h4>
-  <p class="note">Напоминание приходит за 5 минут до начала (время меняется в каждой встрече) и висит, пока вы не нажмёте «Увидел» или «Через 5 минут». Пока нет ответа, сигнал повторяется каждые ${REM_CFG.repeatEveryMin} мин, не больше ${REM_CFG.maxRepeats} раз. Звук и сигналы работают, когда приложение открыто. При закрытом приложении и заблокированном телефоне напоминание пока не сработает: для этого нужен push с сервера.</p>
+  <p class="note">Напоминание приходит за 5 минут до начала (время меняется в каждой встрече) и висит, пока вы не нажмёте «Увидел» или «Через 5 минут». Пока нет ответа, сигнал повторяется каждые ${REM_CFG.repeatEveryMin} мин, не больше ${REM_CFG.maxRepeats} раз. Звук и карточка работают, пока приложение открыто. Чтобы напоминания приходили на заблокированный экран, подключите Bark ниже.</p>
   <button class="wide-btn" data-s="testn">Показать тестовое напоминание</button>
   ${perm==='default'?`<button class="wide-btn" data-s="perm">Разрешить системные уведомления</button>`:''}
+  ${pushSettingsHTML()}
   <h4>Перенос задач</h4>
   <p class="note">Каждое утро невыполненные задачи сами переезжают на сегодня и подсвечиваются жёлтым, а счётчик показывает, сколько раз их переносили.</p>
   <button class="wide-btn" data-s="newday">Сымитировать наступление нового дня</button>
@@ -900,8 +904,10 @@ function openSettings(){
   <h4>Прототип</h4>
   <button class="wide-btn" data-s="reset">Загрузить демо-данные</button>
   <button class="wide-btn danger" data-s="clear">Очистить все данные</button>`);
+  const lv=$('#pkLevel');if(lv)lv.onchange=()=>{$('#pkLevelNote').textContent=(BARK_LEVELS.find(x=>x[0]===lv.value)||BARK_LEVELS[0])[1]};
   sheet.onclick=async x=>{
     const b=x.target.closest('[data-s]');if(!b)return;const s=b.dataset.s;
+    if(s.startsWith('pk-')){await pushSettingsAction(s);return}
     if(s==='cancel')closeSheet();
     else if(s==='testn'){unlockAudio();const t=today();const up=S.events.filter(e=>!e.allDay&&(e.date>t||(e.date===t&&toMin(e.start)>nowMin()))).sort((a,b)=>(a.date+a.start).localeCompare(b.date+b.start))[0]||S.events.find(e=>!e.allDay);closeSheet();if(up){S.rem['test|'+Date.now()]={evId:up.id,test:true,state:'pending',since:Date.now(),pings:0,lastPing:0};save();tickRems()}else toast('Добавьте встречу, чтобы проверить напоминание')}
     else if(s==='perm'){try{const r=await Notification.requestPermission();toast(r==='granted'?'Системные уведомления включены':'Браузер не дал разрешение — останутся баннеры в приложении')}catch(_){toast('Здесь системные уведомления недоступны')}}
@@ -1044,6 +1050,95 @@ window.addEventListener('storage',e=>{
     if(!G)renderAll();renderRems()}catch(_){}
 });
 
+/* ---------- lock-screen reminders via the Bark app ----------
+   The app sends upcoming reminders (next 14 days) to a small server; the server pushes them to Bark on time,
+   repeats every 2 min (max 3) until «Увидел», and follows «Через 5 минут». */
+const PUSH_API=window.KAL_PUSH_API||'';
+const BARK_SOUNDS=[['alarm','Будильник'],['multiwayinvitation','Вызов'],['bell','Колокол'],['chime','Перезвон'],['glass','Стекло'],['horn','Гудок'],['minuet','Менуэт'],['birdsong','Птицы'],['calypso','Калипсо'],['telegraph','Телеграф'],['update','Обновление']];
+const BARK_LEVELS=[['timeSensitive','Срочное — видно даже в режиме фокусирования'],['active','Обычное'],['critical','Критическое — звучит даже в беззвучном режиме']];
+function pushCfg(){
+  S.push=S.push||{};
+  if(!S.push.uid){const a=new Uint8Array(16);crypto.getRandomValues(a);S.push.uid=[...a].map(b=>'abcdefghijklmnopqrstuvwxyz0123456789'[b%36]).join('')+'k'.repeat(4)}
+  if(!S.push.sound)S.push.sound='alarm';if(!S.push.level)S.push.level='timeSensitive';
+  return S.push;
+}
+function pushItems(){
+  const now=Date.now(),horizon=now+14*864e5,out=[];
+  S.events.forEach(ev=>{
+    if(ev.allDay||ev.remind<0)return;
+    const st=evStartMs(ev),en=evEndMs(ev);if(en<=now||st>horizon)return;
+    const k=remKey(ev),r=S.rem[k];
+    const it={key:k,title:ev.title||'Встреча',body:`${dayLabel(ev.date)}, ${ev.start}–${ev.end}${ev.place?' · '+ev.place:''}${ev.desc?' · '+ev.desc:''}`,start:st,remindAt:st-ev.remind*60000,endAt:en};
+    if(r&&r.state==='ack')it.state='ack';
+    else if(r&&r.state==='snoozed'){it.state='snoozed';it.until=r.until}
+    out.push(it);
+  });
+  return out;
+}
+let pushT=null,pushLast='',pushBusy=false;
+function schedulePushSync(force){
+  const p=S.push;if(!PUSH_API||!p||!p.bark)return;
+  clearTimeout(pushT);pushT=setTimeout(()=>pushSync(force),force?0:1200);
+}
+async function pushSync(force){
+  const p=pushCfg();if(!PUSH_API||!p.bark||pushBusy)return;
+  const body={uid:p.uid,bark:p.bark,sound:p.sound,level:p.level,call:!!p.call,enc:p.enc||'',url:location.href.split('#')[0],items:pushItems()};
+  const sig=JSON.stringify(body);if(!force&&sig===pushLast)return;
+  pushBusy=true;
+  try{const r=await fetch(PUSH_API+'/sync',{method:'POST',headers:{'content-type':'application/json'},body:sig});
+    const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||('HTTP '+r.status));
+    pushLast=sig;p.lastSync=Date.now();p.lastErr=''}
+  catch(e){p.lastErr=String(e.message||e)}
+  finally{pushBusy=false;rawSave();renderPushStatus()}
+}
+function pushStatusText(){
+  const p=S.push||{};
+  if(!PUSH_API)return'Сервер напоминаний ещё не подключён.';
+  if(!p.bark)return'Не подключено.';
+  if(p.lastErr)return'Нет связи с сервером: '+p.lastErr+'. Напоминания придут после восстановления связи.';
+  if(p.lastSync){const d=new Date(p.lastSync);return`Подключено · расписание отправлено в ${pad(d.getHours())}:${pad(d.getMinutes())}`}
+  return'Подключено · отправляю расписание…';
+}
+function renderPushStatus(){const el=document.getElementById('pkStatus');if(el){el.textContent=pushStatusText();el.classList.toggle('err',!!(S.push&&S.push.lastErr))}}
+function pushSettingsHTML(){
+  const p=pushCfg();
+  return `<h4>Уведомления на заблокированный экран</h4>
+  <p class="note">Через бесплатное приложение <b>Bark</b> из App Store. Установите его, скопируйте свой ключ (ссылку вида api.day.app/…) и вставьте ниже. Напоминания придут, даже когда «Календарь» закрыт, и будут повторяться каждые ${REM_CFG.repeatEveryMin} мин (не больше ${REM_CFG.maxRepeats} раз), пока вы не нажмёте «Увидел» здесь.</p>
+  <div class="fg">
+    <input class="plain" id="pkBark" placeholder="Ключ или ссылка из Bark" value="${esc(p.bark||'')}" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <label class="frow">Звук<select id="pkSound">${BARK_SOUNDS.map(([v,l])=>`<option value="${v}" ${p.sound===v?'selected':''}>${l}</option>`).join('')}</select></label>
+    <label class="frow">Важность<select id="pkLevel">${BARK_LEVELS.map(([v,l])=>`<option value="${v}" ${p.level===v?'selected':''}>${l.split(' — ')[0]}</option>`).join('')}</select></label>
+    <label class="frow">Звонить 30 секунд<input type="checkbox" class="switch" id="pkCall" ${p.call?'checked':''}></label>
+  </div>
+  <p class="note" id="pkLevelNote">${esc((BARK_LEVELS.find(x=>x[0]===p.level)||BARK_LEVELS[0])[1])}</p>
+  <div class="fg"><input class="plain" id="pkEnc" placeholder="Ключ шифрования, 16 символов (необязательно)" value="${esc(p.enc||'')}" maxlength="16" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+  <p class="note">Шифрование скрывает названия встреч от сервера Bark. Нажмите «Создать ключ» и введите этот же ключ в Bark → Настройки → Шифрование (AES-128, режим CBC).</p>
+  <button class="wide-btn" data-s="pk-gen">Создать ключ шифрования</button>
+  <button class="wide-btn" data-s="pk-save">Сохранить и подключить</button>
+  <button class="wide-btn" data-s="pk-test">Проверить — прислать тестовое уведомление</button>
+  <p class="note pk-status" id="pkStatus">${esc(pushStatusText())}</p>
+  ${p.bark?`<button class="wide-btn danger" data-s="pk-off">Отключить уведомления на экран блокировки</button>`:''}`;
+}
+async function pushSettingsAction(s){
+  const p=pushCfg();
+  const readForm=()=>{p.bark=($('#pkBark').value||'').trim();p.sound=$('#pkSound').value;p.level=$('#pkLevel').value;p.call=$('#pkCall').checked;p.enc=($('#pkEnc').value||'').trim()};
+  if(s==='pk-gen'){const a=new Uint8Array(16);crypto.getRandomValues(a);$('#pkEnc').value=[...a].map(b=>'abcdefghjkmnpqrstuvwxyz23456789'[b%31]).join('');toast('Ключ создан. Введите его в Bark и нажмите «Сохранить»');return true}
+  if(s==='pk-save'){readForm();
+    if(p.enc&&p.enc.length!==16){toast('Ключ шифрования должен быть ровно 16 символов');return true}
+    if(!p.bark){toast('Вставьте ключ из Bark');return true}
+    if(!PUSH_API){rawSave();toast('Сохранено. Сервер напоминаний пока не подключён');return true}
+    rawSave();await pushSync(true);toast(S.push.lastErr?'Не удалось связаться с сервером':'Подключено. Напоминания придут на экран блокировки');return true}
+  if(s==='pk-test'){readForm();if(!p.bark){toast('Вставьте ключ из Bark');return true}
+    if(!PUSH_API){toast('Сервер напоминаний пока не подключён');return true}
+    try{const r=await fetch(PUSH_API+'/test',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({uid:p.uid,bark:p.bark,sound:p.sound,level:p.level,call:!!p.call,enc:p.enc&&p.enc.length===16?p.enc:'',url:location.href.split('#')[0]})});
+      const j=await r.json().catch(()=>({}));toast(r.ok?'Отправлено. Уведомление должно прийти через пару секунд':(j.error||'Bark не принял уведомление — проверьте ключ'))}
+    catch(_){toast('Нет связи с сервером напоминаний')}return true}
+  if(s==='pk-off'){
+    if(PUSH_API)try{await fetch(PUSH_API+'/sync',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({uid:p.uid,off:true})})}catch(_){}
+    p.bark='';p.lastSync=0;p.lastErr='';pushLast='';rawSave();closeSheet();toast('Уведомления на экран блокировки отключены');return true}
+  return false;
+}
+
 /* ---------- loop ---------- */
 function renderAll(){renderCal();renderTasks()}
 let lastDay=today(),lastMin=nowMin();
@@ -1057,9 +1152,9 @@ setInterval(()=>{
   if(m!==lastMin){lastMin=m;const nl=$('#nowLine');if(nl)nl.style.top=(m/60*H)+'px'}
   if(today()!==lastDay){const was=lastDay;lastDay=today();carryOver();if(UI.taskDate===was)UI.taskDate=lastDay;if(UI.calDate===was)UI.calDate=lastDay;renderAll();maybeReview()}
 },1000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden){carryOver();renderAll();checkReminders();maybeReview()}});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){carryOver();renderAll();checkReminders();maybeReview();schedulePushSync()}});
 
-carryOver();renderAll();setPane(0);setTimeout(checkReminders,800);setTimeout(maybeReview,700);
+carryOver();renderAll();setPane(0);setTimeout(checkReminders,800);setTimeout(maybeReview,700);setTimeout(()=>schedulePushSync(),1500);
 })();
 </script>
 
