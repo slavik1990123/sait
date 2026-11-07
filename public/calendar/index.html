@@ -918,17 +918,11 @@ function openSettings(){
   <button class="wide-btn" data-s="testn">Показать тестовое напоминание</button>
   ${perm==='default'?`<button class="wide-btn" data-s="perm">Разрешить системные уведомления</button>`:''}
   ${pushSettingsHTML()}
-  <h4>Перенос задач</h4>
-  <p class="note">Каждое утро невыполненные задачи сами переезжают на сегодня и подсвечиваются жёлтым, а счётчик показывает, сколько раз их переносили.</p>
-  <button class="wide-btn" data-s="newday">Сымитировать наступление нового дня</button>
   <h4>Резервная копия</h4>
   <p class="note">Данные хранятся на этом устройстве. Скопируйте их, чтобы сохранить или перенести на другое устройство.</p>
   <button class="wide-btn" data-s="copy">Скопировать данные</button>
   <textarea class="json" id="jsonBox" placeholder="Вставьте сюда скопированные данные, чтобы восстановить"></textarea>
-  <button class="wide-btn" data-s="restore">Восстановить из вставленного</button>
-  <h4>Прототип</h4>
-  <button class="wide-btn" data-s="reset">Загрузить демо-данные</button>
-  <button class="wide-btn danger" data-s="clear">Очистить все данные</button>`);
+  <button class="wide-btn" data-s="restore">Восстановить из вставленного</button>`);
   if(S.push&&S.push.bark&&S.push.keyOk&&PUSH_API)pushSync(true);
   const pkDirty=msg=>{const sb=sheet.querySelector('[data-s="pk-save"]');if(sb)sb.classList.add('attn');toast(msg+'. Нажмите «Сохранить и подключить»','Сохранить',()=>pushSettingsAction('pk-save'))};
   const lv=$('#pkLevel');if(lv)lv.onchange=()=>{$('#pkLevelNote').textContent=(BARK_LEVELS.find(x=>x[0]===lv.value)||BARK_LEVELS[0])[1];pkDirty('Важность изменена')};
