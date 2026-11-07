@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
-<script>window.APP_EMPTY_START=true;window.KAL_PUSH_API='https://kalendar-push.karuhin.workers.dev'</script>
+<script>window.APP_EMPTY_START=true;window.KAL_PUSH_API='https://kalendar-push.karuhin.workers.dev';window.KAL_VERSION='21 · 7 ноября'</script>
 <title>Мой календарь</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&display=swap">
@@ -293,6 +293,7 @@ input,textarea,select{font:inherit;font-size:16px;color:var(--fg)}
 .wide-btn.danger{color:var(--danger)}
 .note{font-size:13px;color:var(--muted);line-height:1.45;padding:2px 4px 12px}
 .pk-status{font-weight:600}
+.app-ver{text-align:center;padding-top:14px}
 .pk-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .pk-ind{display:inline-flex;align-items:center;gap:6px;flex:none;text-transform:none;letter-spacing:0;font-size:13px;font-weight:700;padding:4px 10px;border-radius:20px}
 .pk-ind i{width:9px;height:9px;border-radius:50%}
@@ -1013,7 +1014,8 @@ function openSettings(){
   <p class="note">Данные хранятся на этом устройстве. Скопируйте их, чтобы сохранить или перенести на другое устройство.</p>
   <button class="wide-btn" data-s="copy">Скопировать данные</button>
   <textarea class="json" id="jsonBox" placeholder="Вставьте сюда скопированные данные, чтобы восстановить"></textarea>
-  <button class="wide-btn" data-s="restore">Восстановить из вставленного</button>`);
+  <button class="wide-btn" data-s="restore">Восстановить из вставленного</button>
+  <p class="note app-ver">Версия приложения: ${window.KAL_VERSION||'прототип'}</p>`);
   if(S.push&&S.push.bark&&S.push.keyOk&&PUSH_API)pushSync(true);
   const nt=$('#prNoTimer');if(nt)nt.onchange=()=>{S.prefs=S.prefs||{};S.prefs.noTimer=nt.checked;
     if(nt.checked)S.tasks.forEach(k=>stopTimer(k));save();renderTasks();
@@ -1339,6 +1341,14 @@ carryOver();renderAll();setPane(0);setTimeout(checkReminders,800);setTimeout(may
 })();
 </script>
 
-<script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));</script>
+<script>
+if('serviceWorker' in navigator){
+  const hadController=!!navigator.serviceWorker.controller;let pending=false,done=false;
+  const reload=()=>{if(done)return;const sheet=document.getElementById('sheetWrap');if(sheet&&!sheet.hidden){pending=true;return}done=true;location.reload()};
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(hadController)reload()});   // a new version took over
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&pending)reload()});
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));
+}
+</script>
 </body>
 </html>
