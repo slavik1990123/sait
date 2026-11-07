@@ -869,7 +869,7 @@ $('#scrim').addEventListener('click',closeSheet);
 
 function openEvent(ev,date,startMin){
   const isNew=!ev;
-  const e=ev?{...ev}:{id:uid(),title:'',date:date||UI.calDate,start:fromMin(startMin??600),end:fromMin(Math.min((startMin??600)+60,24*60-1)),allDay:false,color:'peacock',remind:5,place:'',desc:''};
+  const e=ev?{...ev}:{id:uid(),title:'',date:date||UI.calDate,start:fromMin(startMin??600),end:fromMin(Math.min((startMin??600)+60,24*60-1)),allDay:false,color:'peacock',remind:15,remind2:false,place:'',desc:''};
   openSheet(`<div class="sheet-head"><button data-s="cancel">Отмена</button><b>${isNew?'Новая встреча':'Встреча'}</b><button class="r" data-s="save">Готово</button></div>
   <input class="big-input" id="evTitle" placeholder="Название" value="${esc(e.title)}" autocomplete="off">
   <div class="fg">
@@ -879,10 +879,12 @@ function openEvent(ev,date,startMin){
     <label class="frow tm">Конец<input type="time" id="evEnd" value="${e.end||'11:00'}"></label>
   </div>
   <div class="fg"><div class="frow colm"><span>Цвет · <span id="colName">${colorOf(e.color).name}</span></span><div class="swatches">${COLORS.map(c=>`<button class="sw" data-c="${c.id}" aria-label="${c.name}" aria-pressed="${c.id===e.color}" style="background:${c.hex}"></button>`).join('')}</div></div></div>
-  <div class="fg"><label class="frow">Напоминание<select id="evRem">${REMINDS.map(([v,l])=>`<option value="${v}" ${+e.remind===v?'selected':''}>${l}</option>`).join('')}</select></label></div>
+  <div class="fg"><label class="frow">Напоминание<select id="evRem">${REMINDS.map(([v,l])=>`<option value="${v}" ${+e.remind===v?'selected':''}>${l}</option>`).join('')}</select></label>
+    <label class="frow" id="evRem2Row">Ещё напомнить за 5 минут<input type="checkbox" class="switch" id="evRem2" ${e.remind2?'checked':''}></label></div>
   <div class="fg"><input class="plain" id="evPlace" placeholder="Место или ссылка" value="${esc(e.place)}" autocomplete="off"><textarea id="evDesc" placeholder="Описание">${esc(e.desc)}</textarea></div>
   ${isNew?'':`<button class="wide-btn danger" data-s="del">Удалить встречу</button>`}`);
   const allEl=$('#evAll'),tms=sheet.querySelectorAll('.tm');
+  const r2Row=$('#evRem2Row'),syncR2=()=>{r2Row.hidden=!(+$('#evRem').value>5)};syncR2();$('#evRem').onchange=syncR2;
   const syncAll=()=>tms.forEach(x=>x.hidden=allEl.checked);syncAll();allEl.onchange=syncAll;
   let dur=Math.max(toMin(e.end)-toMin(e.start),15);
   $('#evStart').onchange=()=>{$('#evEnd').value=fromMin(toMin($('#evStart').value)+dur)};
@@ -897,7 +899,7 @@ function openEvent(ev,date,startMin){
       e.title=$('#evTitle').value.trim()||'Без названия';e.allDay=allEl.checked;e.date=$('#evDate').value||e.date;
       e.start=$('#evStart').value||'10:00';e.end=$('#evEnd').value||fromMin(toMin(e.start)+60);
       if(toMin(e.end)<=toMin(e.start))e.end=fromMin(toMin(e.start)+30);
-      e.remind=+$('#evRem').value;e.place=$('#evPlace').value.trim();e.desc=$('#evDesc').value.trim();
+      e.remind=+$('#evRem').value;e.remind2=e.remind>5&&$('#evRem2').checked;e.place=$('#evPlace').value.trim();e.desc=$('#evDesc').value.trim();
       const i=S.events.findIndex(z=>z.id===e.id);if(i<0)S.events.push(e);else S.events[i]=e;
       save();closeSheet();UI.calDate=e.date;renderCal();checkReminders();
     }
@@ -986,6 +988,8 @@ function toast(msg,actLabel,act){
    key = eventId|date|start  -> one instance of a meeting; moving the meeting changes the key. */
 const REM_CFG={repeatEveryMin:2,maxRepeats:3,snoozeMin:5};
 const remKey=ev=>ev.id+'|'+ev.date+'|'+ev.start;
+/* main reminder + optional second one 5 minutes before start (replaces the first if it is still open) */
+const remSlots=ev=>{if(ev.allDay||ev.remind<0)return[];const k=remKey(ev),a=[{k,min:ev.remind}];if(ev.remind2&&ev.remind>5)a.push({k:k+'|r2',min:5,sup:k});return a};
 const evStartMs=ev=>parse(ev.date).getTime()+toMin(ev.start)*60000;
 const evEndMs=ev=>{let e=toMin(ev.end);if(e<=toMin(ev.start))e=toMin(ev.start)+30;return parse(ev.date).getTime()+e*60000};
 const evById=id=>S.events.find(e=>e.id===id);
@@ -996,13 +1000,14 @@ function dropRems(evId){for(const k in S.rem)if(S.rem[k].evId===evId&&!S.rem[k].
 function reconcileRems(){
   const now=Date.now(),R=S.rem;let ch=false;
   for(const k in R){const r=R[k],ev=evById(r.evId);
-    const stale=!ev||ev.allDay||(!r.test&&(ev.remind<0||remKey(ev)!==k));
+    const stale=!ev||ev.allDay||(!r.test&&!remSlots(ev).some(x=>x.k===k));
     const old=ev&&(r.state==='ack'||r.state==='expired')&&now>evEndMs(ev)+7*864e5;
     if(stale||old){delete R[k];closeSystemNote(k);ch=true}}
-  S.events.forEach(ev=>{
-    if(ev.allDay||ev.remind<0)return;
-    const k=remKey(ev),st=evStartMs(ev);
-    if(!R[k]&&now>=st-ev.remind*60000&&(now<st||(ev.remind===0&&now<st+60000))){R[k]={evId:ev.id,state:'pending',since:now,pings:0,lastPing:0};ch=true}
+  S.events.forEach(ev=>{const st=evStartMs(ev);
+    remSlots(ev).forEach(x=>{const k=x.k;
+      if(R[k]||now<st-x.min*60000||!(now<st||(x.min===0&&now<st+60000)))return;
+      R[k]={evId:ev.id,state:'pending',since:now,pings:0,lastPing:0};ch=true;
+      const m=x.sup&&R[x.sup];if(m&&(m.state==='pending'||m.state==='snoozed')){m.state='superseded';m.at=now;closeSystemNote(x.sup)}});
   });
   for(const k in R){const r=R[k];
     if(r.state==='snoozed'&&now>=r.until){const ev=evById(r.evId);
@@ -1119,14 +1124,14 @@ function pushCfg(){
 function pushItems(){
   const now=Date.now(),horizon=now+14*864e5,out=[];
   S.events.forEach(ev=>{
-    if(ev.allDay||ev.remind<0)return;
     const st=evStartMs(ev),en=evEndMs(ev);if(en<=now||st>horizon)return;
-    const k=remKey(ev),r=S.rem[k];
-    const it={key:k,title:ev.title||'Встреча',body:`${dayLabel(ev.date)}, ${ev.start}–${ev.end}${ev.place?' · '+ev.place:''}${ev.desc?' · '+ev.desc:''}`,start:st,remindAt:st-ev.remind*60000,endAt:en};
-    if(r&&r.at)it.stateAt=r.at;
-    if(r&&r.state==='ack')it.state='ack';
-    else if(r&&r.state==='snoozed'){it.state='snoozed';it.until=r.until}
-    out.push(it);
+    remSlots(ev).forEach(x=>{const k=x.k,r=S.rem[k];
+      const it={key:k,title:ev.title||'Встреча',body:`${dayLabel(ev.date)}, ${ev.start}–${ev.end}${ev.place?' · '+ev.place:''}${ev.desc?' · '+ev.desc:''}`,start:st,remindAt:st-x.min*60000,endAt:en};
+      if(x.sup)it.sup=x.sup;
+      if(r&&r.at)it.stateAt=r.at;
+      if(r&&(r.state==='ack'||r.state==='superseded'))it.state=r.state;
+      else if(r&&r.state==='snoozed'){it.state='snoozed';it.until=r.until}
+      out.push(it)});
   });
   return out;
 }
