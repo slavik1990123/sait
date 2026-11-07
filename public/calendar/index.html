@@ -287,6 +287,9 @@ input,textarea,select{font:inherit;font-size:16px;color:var(--fg)}
 .snd-pick select{max-width:46vw}
 .pk-status.ok{color:var(--ok)}
 .pk-status.err{color:var(--danger)}
+.pk-status.flash{animation:pkFlash 1.6s ease}
+@keyframes pkFlash{0%{background:rgba(24,128,56,.22)}100%{background:transparent}}
+.pk-status{border-radius:8px;padding:6px 4px}
 .wide-btn.attn{background:var(--accent);color:var(--accent-fg)}
 .sheet h4{margin:14px 4px 8px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
 .sheet textarea.json{width:100%;min-height:90px;border:0;border-radius:12px;background:var(--bg);padding:12px;font-family:ui-monospace,Menlo,monospace;font-size:12px!important;margin-bottom:10px}
@@ -1085,17 +1088,18 @@ function pushItems(){
 }
 let pushT=null,pushLast='',pushBusy=false;
 function schedulePushSync(force){
-  const p=S.push;if(!PUSH_API||!p||!p.bark)return;
+  const p=S.push;if(!PUSH_API||!p||!p.bark||!p.keyOk)return;
   clearTimeout(pushT);pushT=setTimeout(()=>pushSync(force),force?0:1200);
 }
-async function pushSync(force){
-  const p=pushCfg();if(!PUSH_API||!p.bark||pushBusy)return;
+async function pushSync(force,verify){
+  const p=pushCfg();if(!PUSH_API||!p.bark||pushBusy)return;if(!verify&&!p.keyOk)return;
   const body={uid:p.uid,bark:p.bark,sound:p.sound,level:p.level,call:!!p.call,enc:p.enc||'',url:location.href.split('#')[0],items:pushItems()};
   const sig=JSON.stringify(body);if(!force&&sig===pushLast)return;
   pushBusy=true;
-  try{const r=await fetch(PUSH_API+'/sync',{method:'POST',headers:{'content-type':'application/json'},body:sig});
-    const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||('HTTP '+r.status));
-    pushLast=sig;p.lastSync=Date.now();p.lastErr=''}
+  try{const r=await fetch(PUSH_API+'/sync',{method:'POST',headers:{'content-type':'application/json'},body:verify?JSON.stringify({...body,verify:true}):sig});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok){if(j.kind==='key'){p.keyOk=false;p.lastErr='key'}else throw new Error(j.error||('HTTP '+r.status))}
+    else{pushLast=sig;p.lastSync=Date.now();p.lastErr='';if(verify)p.keyOk=true}}
   catch(e){p.lastErr=String(e.message||e)}
   finally{pushBusy=false;rawSave();renderPushStatus()}
 }
@@ -1103,16 +1107,26 @@ function pushStatusText(){
   const p=S.push||{};
   if(!PUSH_API)return'Сервер напоминаний ещё не подключён.';
   if(!p.bark)return'Не подключено.';
+  if(p.lastErr==='key')return'Ключ не подошёл: Bark его не принял. Скопируйте ключ в Bark заново и нажмите «Сохранить и подключить».';
+  if(!p.keyOk)return'Ключ ещё не проверен. Нажмите «Сохранить и подключить».';
   if(p.lastErr)return'Нет связи с сервером: '+p.lastErr+'. Напоминания придут после восстановления связи.';
-  if(p.lastSync){const d=new Date(p.lastSync);return`Подключено · расписание отправлено в ${pad(d.getHours())}:${pad(d.getMinutes())}`}
+  const k=barkKeyTail(p.bark);
+  if(p.lastSync){const d=new Date(p.lastSync);return`Подключено${k?' (ключ …'+k+')':''} · расписание отправлено в ${pad(d.getHours())}:${pad(d.getMinutes())}`}
   return'Подключено · отправляю расписание…';
 }
-const pushOk=()=>!!(PUSH_API&&S.push&&S.push.bark&&S.push.lastSync&&!S.push.lastErr);
+const pushOk=()=>!!(PUSH_API&&S.push&&S.push.bark&&S.push.keyOk&&S.push.lastSync&&!S.push.lastErr);
+function barkKeyTail(v){const m=String(v||'').match(/api\.day\.app\/([A-Za-z0-9]+)/)||String(v||'').trim().match(/^([A-Za-z0-9]{8,64})$/);return m?m[1].slice(-4):''}
+function barkInputProblem(v){
+  v=String(v||'').trim();if(!v)return'Вставьте ключ из Bark';
+  if(/YOUR_KEY/i.test(v))return'Это пример, а не ключ. В Bark сначала нажмите Enable и разрешите уведомления — тогда вместо YOUR_KEY появится ваш ключ';
+  if(!barkKeyTail(v))return'Не похоже на ключ Bark. Скопируйте ссылку вида https://api.day.app/… кнопкой Copy в Bark';
+  return'';
+}
 function renderPushStatus(){const el=document.getElementById('pkStatus');if(el){el.textContent=pushStatusText();el.classList.toggle('err',!!(S.push&&S.push.lastErr));el.classList.toggle('ok',pushOk())}}
 function pushSettingsHTML(){
   const p=pushCfg();
   return `<h4>Уведомления на заблокированный экран</h4>
-  <p class="note">Через бесплатное приложение <b>Bark</b> из App Store. Установите его, скопируйте свой ключ (ссылку вида api.day.app/…) и вставьте ниже. Напоминания придут, даже когда «Календарь» закрыт, и будут повторяться каждые ${REM_CFG.repeatEveryMin} мин (не больше ${REM_CFG.maxRepeats} раз), пока вы не нажмёте «Увидел» здесь.</p>
+  <p class="note">Через бесплатное приложение <b>Bark</b> из App Store. Установите его, нажмите в Bark <b>Enable</b> и разрешите уведомления, затем кнопкой <b>Copy</b> скопируйте ссылку с ключом (вида api.day.app/…) и вставьте ниже. Напоминания придут, даже когда «Календарь» закрыт, и будут повторяться каждые ${REM_CFG.repeatEveryMin} мин (не больше ${REM_CFG.maxRepeats} раз), пока вы не нажмёте «Увидел» здесь.</p>
   <div class="fg">
     <input class="plain" id="pkBark" placeholder="Ключ или ссылка из Bark" value="${esc(p.bark||'')}" autocomplete="off" autocapitalize="off" spellcheck="false">
     <div class="frow">Звук<span class="snd-pick"><select id="pkSound" aria-label="Звук напоминания">${BARK_SOUNDS.map(([v,l])=>`<option value="${v}" ${p.sound===v?'selected':''}>${l}</option>`).join('')}</select><button class="btn outline sm" data-s="pk-listen" aria-label="Послушать выбранный звук">▶ Послушать</button></span></div>
@@ -1128,6 +1142,7 @@ function pushSettingsHTML(){
   <p class="note pk-status${pushOk()?' ok':''}" id="pkStatus">${esc(pushStatusText())}</p>
   ${p.bark?`<button class="wide-btn danger" data-s="pk-off">Отключить уведомления на экран блокировки</button>`:''}`;
 }
+function showPushOk(){const st=document.getElementById('pkStatus');if(!st)return;st.classList.remove('flash');void st.offsetWidth;st.classList.add('flash')}
 async function pushSettingsAction(s){
   const p=pushCfg();
   if(!$('#pkBark'))return false;
@@ -1135,17 +1150,24 @@ async function pushSettingsAction(s){
   if(s==='pk-gen'){const a=new Uint8Array(16);crypto.getRandomValues(a);$('#pkEnc').value=[...a].map(b=>'abcdefghjkmnpqrstuvwxyz23456789'[b%31]).join('');toast('Ключ создан. Введите его в Bark и нажмите «Сохранить»');return true}
   if(s==='pk-save'){readForm();
     if(p.enc&&p.enc.length!==16){toast('Ключ шифрования должен быть ровно 16 символов');return true}
-    if(!p.bark){toast('Вставьте ключ из Bark');return true}
+    const bad=barkInputProblem(p.bark);if(bad){toast(bad);return true}
     if(!PUSH_API){rawSave();toast('Сохранено. Сервер напоминаний пока не подключён');return true}
-    rawSave();await pushSync(true);if(!S.push.lastErr){const sb=document.querySelector('[data-s="pk-save"]');if(sb)sb.classList.remove('attn')}toast(S.push.lastErr?'Не удалось связаться с сервером':'Подключено. Напоминания придут на экран блокировки');return true}
+    if(p.bark!==p.verifiedBark)p.keyOk=false;
+    rawSave();renderPushStatus();toast('Проверяю ключ…');
+    await pushSync(true,true);
+    if(S.push.keyOk&&!S.push.lastErr){S.push.verifiedBark=p.bark;rawSave();const sb=document.querySelector('[data-s="pk-save"]');if(sb)sb.classList.remove('attn');
+      toast('Ключ принят, всё подключено ✓ На телефон пришло уведомление «Ключ принят»');showPushOk()}
+    else toast(S.push.lastErr==='key'?'Ключ не подошёл. Скопируйте его в Bark заново':'Не удалось связаться с сервером. Попробуйте ещё раз');
+    return true}
   if(s==='pk-listen'){
     const bark=($('#pkBark').value||'').trim(),snd=$('#pkSound').value,name=(BARK_SOUNDS.find(x=>x[0]===snd)||[,snd])[1];
     if(!bark){toast('Сначала вставьте ключ из Bark — звук придёт на телефон');return true}
+    {const bad=barkInputProblem(bark);if(bad){toast(bad);return true}}
     if(!PUSH_API){toast('Сервер напоминаний пока не подключён');return true}
     try{const r=await fetch(PUSH_API+'/test',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({uid:p.uid,bark,sound:snd,level:$('#pkLevel').value,call:false,enc:'',title:'Звук: '+name,body:'Так будет звучать напоминание о встрече'})});
       toast(r.ok?`Отправил пробное уведомление со звуком «${name}»`:'Bark не принял уведомление — проверьте ключ')}
     catch(_){toast('Нет связи с сервером напоминаний')}return true}
-  if(s==='pk-test'){readForm();if(!p.bark){toast('Вставьте ключ из Bark');return true}
+  if(s==='pk-test'){readForm();{const bad=barkInputProblem(p.bark);if(bad){toast(bad);return true}}
     if(!PUSH_API){toast('Сервер напоминаний пока не подключён');return true}
     try{const r=await fetch(PUSH_API+'/test',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({uid:p.uid,bark:p.bark,sound:p.sound,level:p.level,call:!!p.call,enc:p.enc&&p.enc.length===16?p.enc:'',url:location.href.split('#')[0]})});
       const j=await r.json().catch(()=>({}));toast(r.ok?'Отправлено. Уведомление должно прийти через пару секунд':(j.error||'Bark не принял уведомление — проверьте ключ'))}
