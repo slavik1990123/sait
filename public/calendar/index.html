@@ -1027,8 +1027,8 @@ $('#remStack').addEventListener('click',e=>{
   const card=e.target.closest('[data-rem]');if(!card)return;const k=card.dataset.rem,r=S.rem[k];if(!r)return;
   const b=e.target.closest('[data-ra]');
   if(b){const now=Date.now();
-    if(b.dataset.ra==='ack'){r.state='ack';r.ackAt=now}
-    else{r.state='snoozed';r.until=now+REM_CFG.snoozeMin*60000;r.pings=0;r.lastPing=0}
+    if(b.dataset.ra==='ack'){r.state='ack';r.ackAt=now;r.at=now}
+    else{r.state='snoozed';r.until=now+REM_CFG.snoozeMin*60000;r.pings=0;r.lastPing=0;r.at=now}
     save();closeSystemNote(k);card.classList.add('leaving');setTimeout(renderRems,180);
     if(b.dataset.ra==='snooze'){const d=new Date(now+REM_CFG.snoozeMin*60000);toast(`Напомню ещё раз в ${pad(d.getHours())}:${pad(d.getMinutes())}`)}
     return}
@@ -1091,6 +1091,7 @@ function pushItems(){
     const st=evStartMs(ev),en=evEndMs(ev);if(en<=now||st>horizon)return;
     const k=remKey(ev),r=S.rem[k];
     const it={key:k,title:ev.title||'Встреча',body:`${dayLabel(ev.date)}, ${ev.start}–${ev.end}${ev.place?' · '+ev.place:''}${ev.desc?' · '+ev.desc:''}`,start:st,remindAt:st-ev.remind*60000,endAt:en};
+    if(r&&r.at)it.stateAt=r.at;
     if(r&&r.state==='ack')it.state='ack';
     else if(r&&r.state==='snoozed'){it.state='snoozed';it.until=r.until}
     out.push(it);
@@ -1098,6 +1099,16 @@ function pushItems(){
   return out;
 }
 let pushT=null,pushLast='',pushBusy=false;
+/* «Увидел» / «Через 5 минут» pressed on the reminder page (opened from the lock-screen notification) */
+function applyServerStates(srv){
+  if(!srv)return;let ch=false;
+  for(const k in srv){const v=srv[k];if(!v||!v.state)continue;const r=S.rem[k];
+    if(r&&(r.at||0)>=v.at)continue;
+    const evId=k.split('|')[0];if(!evById(evId))continue;
+    S.rem[k]={...(r||{evId}),evId,state:v.state,until:v.until||null,at:v.at,pings:0,lastPing:0};
+    if(v.state==='ack')S.rem[k].ackAt=v.at;closeSystemNote(k);ch=true}
+  if(ch){rawSave();renderRems()}
+}
 function schedulePushSync(force){
   const p=S.push;if(!PUSH_API||!p||!p.bark||!p.keyOk)return;
   clearTimeout(pushT);pushT=setTimeout(()=>pushSync(force),force?0:1200);
@@ -1110,7 +1121,7 @@ async function pushSync(force,verify){
   try{const r=await fetch(PUSH_API+'/sync',{method:'POST',headers:{'content-type':'application/json'},body:verify?JSON.stringify({...body,verify:true}):sig});
     const j=await r.json().catch(()=>({}));
     if(!r.ok){if(j.kind==='key'){p.keyOk=false;p.lastErr='key'}else throw new Error(j.error||('HTTP '+r.status))}
-    else{pushLast=sig;p.lastSync=Date.now();p.lastErr='';if(verify)p.keyOk=true}}
+    else{pushLast=sig;p.lastSync=Date.now();p.lastErr='';if(verify)p.keyOk=true;applyServerStates(j.server)}}
   catch(e){p.lastErr=String(e.message||e)}
   finally{pushBusy=false;rawSave();renderPushStatus()}
 }
@@ -1212,9 +1223,9 @@ setInterval(()=>{
   if(m!==lastMin){lastMin=m;const nl=$('#nowLine');if(nl)nl.style.top=(m/60*H)+'px'}
   if(today()!==lastDay){const was=lastDay;lastDay=today();carryOver();if(UI.taskDate===was)UI.taskDate=lastDay;if(UI.calDate===was)UI.calDate=lastDay;renderAll();maybeReview()}
 },1000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden){carryOver();renderAll();checkReminders();maybeReview();schedulePushSync()}});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){carryOver();renderAll();checkReminders();maybeReview();schedulePushSync(true)}});
 
-carryOver();renderAll();setPane(0);setTimeout(checkReminders,800);setTimeout(maybeReview,700);setTimeout(()=>schedulePushSync(),1500);
+carryOver();renderAll();setPane(0);setTimeout(checkReminders,800);setTimeout(maybeReview,700);setTimeout(()=>schedulePushSync(true),1500);
 })();
 </script>
 
