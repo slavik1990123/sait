@@ -447,7 +447,7 @@ function renderTasks(){
   const prev=$('#listScroll');const keep=prev?prev.scrollTop:0;
   const d=UI.taskDate;
   const list=S.tasks.filter(k=>k.date===d);
-  const open=list.filter(k=>!k.done).sort((a,b)=>keyOf(a)-keyOf(b));
+  const open=list.filter(k=>!k.done).sort((a,b)=>(b.important?1:0)-(a.important?1:0)||keyOf(a)-keyOf(b));
   const done=list.filter(k=>k.done).sort((a,b)=>a.doneAt-b.doneAt);
   const total=list.reduce((s,k)=>s+spentOf(k),0);
   const pct=list.length?Math.round(done.length/list.length*100):0;
@@ -540,7 +540,7 @@ function openSomeday(){
   const add=()=>{const v=cap($('#sdNew').value.trim());if(!v)return;
     S.tasks.push({id:uid(),title:v,desc:'',date:null,spent:0,runningSince:null,done:false,doneAt:null,carried:0,created:Date.now()});
     save();draw();renderTasks();setTimeout(()=>$('#sdNew')?.focus(),50)};
-  const draw=()=>{const ks=S.tasks.filter(k=>!k.date&&!k.done).sort((a,b)=>a.created-b.created);
+  const draw=()=>{const ks=S.tasks.filter(k=>!k.date&&!k.done).sort((a,b)=>(b.important?1:0)-(a.important?1:0)||a.created-b.created);
     sheet.innerHTML=`<div class="sheet-head"><span style="min-width:64px"></span><b>Когда-нибудь</b><button class="r" data-s="cancel">Готово</button></div>
     <p class="note">Задачи без даты. Они не попадают в список дня и не переносятся. Достаньте задачу, когда до неё дойдут руки.</p>
     <div class="fg add-row"><input class="plain" id="sdNew" placeholder="Задача на потом" autocapitalize="sentences" autocomplete="off"><button data-s="add">Добавить</button></div>
