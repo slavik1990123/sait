@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
-<script>window.APP_EMPTY_START=true;window.KAL_PUSH_API='https://kalendar-push.karuhin.workers.dev';window.KAL_VERSION='21 · 7 ноября'</script>
+<script>window.APP_EMPTY_START=true;window.KAL_PUSH_API='https://kalendar-push.karuhin.workers.dev';window.KAL_VERSION='22 · 7 ноября'</script>
 <title>Мой календарь</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&display=swap">
@@ -79,6 +79,15 @@ input,textarea,select{font:inherit;font-size:16px;color:var(--fg)}
 .strip .wd.we{color:var(--danger)}
 .strip .dot{width:5px;height:5px;border-radius:50%;background:transparent}
 .strip .dot.on{background:var(--muted)}
+.cstrip{display:flex;gap:0;overflow-x:auto;scroll-snap-type:x mandatory;touch-action:pan-x;scrollbar-width:none;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+.cstrip::-webkit-scrollbar{display:none}
+.cstrip button{flex:0 0 calc(100% / 7)}
+.cstrip button.wk{scroll-snap-align:start}
+.cstrip button.other .dn{color:var(--done)}
+.cstrip button.is-sel.other .dn{color:var(--accent-fg)}
+.ev.live{animation:evLive 2.6s ease-in-out infinite;z-index:3;transform-origin:50% 50%}
+@keyframes evLive{0%,100%{transform:scale(1);filter:brightness(1) saturate(1);box-shadow:0 0 0 0 transparent}
+  50%{transform:scale(1.03);filter:brightness(1.14) saturate(1.3);box-shadow:0 0 0 3px color-mix(in srgb,var(--evc) 35%,transparent),0 8px 20px color-mix(in srgb,var(--evc) 45%,transparent)}}
 .strip .dot.warn{background:#F4511E}
 .strip .dot.ok{background:var(--ok)}
 
@@ -468,7 +477,8 @@ function evTile(x,d){
   const past=(d<today())||(d===today()&&x.en<=nowMin());
   const short=h<38;
   const sz=short?' short':h<84?' mid':h>=140?' tall':'';
-  return `<div class="ev${sz}${past?' past':''}" data-ev="${x.e.id}" style="top:${top}px;height:${h-1}px;left:calc(${x.col/x.n*100}% + 1px);width:calc(${100/x.n}% - 2px);background:${c.hex};color:${c.dark?'#3b2f00':'#fff'}"><b>${esc(x.e.title)||'Без названия'}</b><span>${x.e.start}–${x.e.end}</span></div>`;
+  const live=d===today()&&nowMin()>=x.s&&nowMin()<x.en;
+  return `<div class="ev${sz}${past?' past':''}${live?' live':''}" data-ev="${x.e.id}" style="--evc:${c.hex};top:${top}px;height:${h-1}px;left:calc(${x.col/x.n*100}% + 1px);width:calc(${100/x.n}% - 2px);background:${c.hex};color:${c.dark?'#3b2f00':'#fff'}"><b>${esc(x.e.title)||'Без названия'}</b><span>${x.e.start}–${x.e.end}</span></div>`;
 }
 function gridHTML(dates){
   let h='';
@@ -481,6 +491,26 @@ function alldayHTML(dates){
   const any=dates.some(d=>evsOn(d).some(e=>e.allDay));if(!any)return'';
   return `<div class="allday"><div class="lab">весь<br>день</div><div class="cells" style="grid-template-columns:repeat(${dates.length},1fr)">${dates.map(d=>`<div class="ad">${evsOn(d).filter(e=>e.allDay).map(e=>{const c=colorOf(e.color);return`<div class="chip" data-ev="${e.id}" style="background:${c.hex};color:${c.dark?'#3b2f00':'#fff'}">${esc(e.title)}</div>`}).join('')}</div>`).join('')}</div></div>`;
 }
+/* meeting happening right now: gentle pulse; re-checked every minute */
+function refreshLive(){const t=today(),nm=nowMin();
+  document.querySelectorAll('#calPane .ev[data-ev]').forEach(el=>{const ev=S.events.find(e=>e.id===el.dataset.ev);if(!ev||ev.allDay)return;
+    const s0=toMin(ev.start);let en=toMin(ev.end);if(en<=s0)en=Math.min(s0+30,24*60);
+    el.classList.toggle('live',ev.date===t&&nm>=s0&&nm<en);el.classList.toggle('past',ev.date<t||(ev.date===t&&en<=nm))})}
+/* scrollable date strip shown in every calendar view */
+function calStripHTML(){
+  const sel=UI.calDate,d=parse(sel),t=today();
+  const from=weekStart(ymd(new Date(d.getFullYear(),d.getMonth()-1,1))),to=addDays(weekStart(ymd(new Date(d.getFullYear(),d.getMonth()+2,0))),6);
+  let h='';
+  for(let x=from;x<=to;x=addDays(x,1)){const wi=wdi(x),dd=parse(x),other=dd.getMonth()!==d.getMonth();
+    h+=`<button data-act="spick" data-date="${x}" class="${wi===0?'wk ':''}${x===t?'is-today ':''}${x===sel?'is-sel ':''}${other?'other':''}"><span class="wd${wi>4?' we':''}">${dd.getDate()===1?MONTHS_G[dd.getMonth()].slice(0,3):WD[wi]}</span><span class="dn">${dd.getDate()}</span><span class="dot ${evsOn(x).length?'on':''}"></span></button>`}
+  return `<div class="strip cstrip" id="cstrip" data-key="${from}">${h}</div>`;
+}
+function placeStrip(keep){
+  const cs=$('#cstrip');if(!cs)return;const kids=[...cs.children],w=cs.clientWidth/7;if(!w)return;
+  const si=kids.findIndex(b=>b.dataset.date===UI.calDate),wi=kids.findIndex(b=>b.dataset.date===weekStart(UI.calDate));
+  if(keep&&keep.key===cs.dataset.key&&si*w>=keep.left-1&&(si+1)*w<=keep.left+cs.clientWidth+1)cs.scrollLeft=keep.left;
+  else cs.scrollLeft=Math.max(0,wi)*w;
+}
 function stripHTML(sel,kind){
   const ws=weekStart(sel),t=today();let h='';
   for(let i=0;i<7;i++){const d=addDays(ws,i);let dot='';
@@ -491,6 +521,7 @@ function stripHTML(sel,kind){
 }
 function renderCal(){
   const prev=$('#gridScroll');const keep=prev?prev.scrollTop:null;
+  const pcs=$('#cstrip');const stripKeep=pcs?{left:pcs.scrollLeft,key:pcs.dataset.key}:null;
   const d=parse(UI.calDate),v=UI.view;
   let body='';
   if(v==='1day'){
@@ -506,8 +537,9 @@ function renderCal(){
       <button class="today-btn" data-act="today" aria-label="Сегодня">${new Date().getDate()}</button>
       <button class="icon-btn" data-act="settings" aria-label="Настройки">${icon.gear}</button></div>
     <div class="seg" role="tablist">${[['1day','1 день'],['3day','3 дня'],['month','Месяц']].map(([k,l])=>`<button role="tab" data-act="view" data-view="${k}" aria-selected="${v===k}">${l}</button>`).join('')}</div>
-    ${v==='1day'?stripHTML(UI.calDate,'cal'):''}
+    ${calStripHTML()}
   </header>${body}`;
+  placeStrip(stripKeep);
   const g=$('#gridScroll');
   if(g){if(keep!=null&&UI.scrolled)g.scrollTop=keep;else{g.scrollTop=Math.max(0,(Math.min(nowMin(),20*60)/60-1.5)*H);UI.scrolled=true}}
 }
@@ -661,10 +693,10 @@ calPane.addEventListener('click',e=>{
   if(a){const act=a.dataset.act;
     if(act==='view'){UI.view=a.dataset.view;renderCal()}
     else if(act==='prev'||act==='next'){const s=act==='prev'?-1:1;
-      if(UI.view==='1day')UI.calDate=addDays(UI.calDate,s);
-      else if(UI.view==='3day')UI.calDate=addDays(UI.calDate,3*s);
-      else{const d=parse(UI.calDate);UI.calDate=ymd(new Date(d.getFullYear(),d.getMonth()+s,1))}
+      const d=parse(UI.calDate),nd=new Date(d.getFullYear(),d.getMonth()+s,1),t=parse(today());
+      UI.calDate=(nd.getFullYear()===t.getFullYear()&&nd.getMonth()===t.getMonth())?today():ymd(nd);
       renderCal()}
+    else if(act==='spick'){UI.calDate=a.dataset.date;renderCal()}
     else if(act==='today'){UI.calDate=today();UI.scrolled=false;renderCal()}
     else if(act==='pick'){UI.calDate=a.dataset.date;if(UI.view==='month')UI.view='1day';renderCal()}
     else if(act==='settings')openSettings();
@@ -689,7 +721,7 @@ $('#fab').addEventListener('click',()=>{if(UI.pane===0){const m=UI.calDate===tod
 /* ---------- gestures: pane swipe, week-strip swipe, task-row swipe ---------- */
 let G=null;const app=$('#app');
 app.addEventListener('pointerdown',e=>{
-  if(e.button>0||e.target.closest('.sheet-wrap,.rem-stack,.toast,.tabbar,.fab,input,textarea,select'))return;
+  if(e.button>0||e.target.closest('.sheet-wrap,.rem-stack,.toast,.tabbar,.fab,input,textarea,select,.cstrip'))return;
   const row=e.target.closest('.task-row'),strip=e.target.closest('[data-strip]');
   let mode='pane';if(row&&!e.target.closest('button'))mode='row';else if(strip)mode='strip';
   G={x:e.clientX,y:e.clientY,mode,row,strip,active:false,dx:0,id:e.pointerId};
@@ -1329,7 +1361,7 @@ setInterval(()=>{
   updateTabs();
   checkReminders();
   const m=nowMin();
-  if(m!==lastMin){lastMin=m;const nl=$('#nowLine');if(nl)nl.style.top=(m/60*H)+'px';
+  if(m!==lastMin){lastMin=m;const nl=$('#nowLine');if(nl)nl.style.top=(m/60*H)+'px';refreshLive();
     const p=S.push;   // retry after a network error; refresh the schedule every 30 min while open
     if(p&&p.keyOk&&p.bark&&((p.lastErr&&p.lastErr!=='key')||Date.now()-(p.lastSync||0)>30*60000))pushSync(true)}
   if(today()!==lastDay){const was=lastDay;lastDay=today();carryOver();if(UI.taskDate===was)UI.taskDate=lastDay;if(UI.calDate===was)UI.calDate=lastDay;renderAll();maybeReview()}
