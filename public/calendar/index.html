@@ -427,6 +427,7 @@ let STORAGE_OK=true;try{localStorage.setItem('__kal_t','1');localStorage.removeI
 function rawSave(){if(window.__failSave)return false;if(!STORAGE_OK)return true;try{localStorage.setItem(KEY,JSON.stringify(S));return true}catch(e){return false}}
 function save(){const ok=rawSave();if(ok)try{schedulePushSync()}catch(_){}return ok}
 S=load();
+if(!S.migr15){const now=Date.now();(S.events||[]).forEach(e=>{if(e.remind===5&&!e.allDay){const t=parse(e.date).getTime()+toMin(e.end||e.start)*60000;if(t>now)e.remind=15}});S.migr15=true;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(_){}}
 
 const UI={pane:0,view:'1day',calDate:today(),taskDate:today(),scrolled:false};
 
@@ -884,7 +885,9 @@ function openEvent(ev,date,startMin){
   <div class="fg"><input class="plain" id="evPlace" placeholder="Место или ссылка" value="${esc(e.place)}" autocomplete="off"><textarea id="evDesc" placeholder="Описание">${esc(e.desc)}</textarea></div>
   ${isNew?'':`<button class="wide-btn danger" data-s="del">Удалить встречу</button>`}`);
   const allEl=$('#evAll'),tms=sheet.querySelectorAll('.tm');
-  const r2Row=$('#evRem2Row'),syncR2=()=>{r2Row.hidden=!(+$('#evRem').value>5)};syncR2();$('#evRem').onchange=syncR2;
+  const r2=$('#evRem2'),remSel=$('#evRem');
+  r2.onchange=()=>{if(r2.checked&&!(+remSel.value>5)){remSel.value='15';toast('Основное напоминание — за 15 минут, второе — за 5')}};
+  remSel.onchange=()=>{if(!(+remSel.value>5)&&r2.checked){r2.checked=false;toast('Второе напоминание за 5 минут выключено: основное и так не раньше')}};
   const syncAll=()=>tms.forEach(x=>x.hidden=allEl.checked);syncAll();allEl.onchange=syncAll;
   let dur=Math.max(toMin(e.end)-toMin(e.start),15);
   $('#evStart').onchange=()=>{$('#evEnd').value=fromMin(toMin($('#evStart').value)+dur)};
