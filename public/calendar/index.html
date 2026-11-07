@@ -1125,7 +1125,7 @@ function pushCfg(){
   return S.push;
 }
 function pushItems(){
-  const now=Date.now(),horizon=now+14*864e5,out=[];
+  const now=Date.now(),horizon=now+60*864e5,out=[];
   S.events.forEach(ev=>{
     const st=evStartMs(ev),en=evEndMs(ev);if(en<=now||st>horizon)return;
     remSlots(ev).forEach(x=>{const k=x.k,r=S.rem[k];
@@ -1138,7 +1138,7 @@ function pushItems(){
   });
   return out;
 }
-let pushT=null,pushLast='',pushBusy=false;
+let pushT=null,pushLast='',pushBusy=false,pushAgain=false;
 /* «Увидел» / «Через 5 минут» pressed on the reminder page (opened from the lock-screen notification) */
 function applyServerStates(srv){
   if(!srv)return;let ch=false;
@@ -1154,16 +1154,18 @@ function schedulePushSync(force){
   clearTimeout(pushT);pushT=setTimeout(()=>pushSync(force),force?0:1200);
 }
 async function pushSync(force,verify){
-  const p=pushCfg();if(!PUSH_API||!p.bark||pushBusy)return;if(!verify&&!p.keyOk)return;
+  const p=pushCfg();if(!PUSH_API||!p.bark)return;if(!verify&&!p.keyOk)return;
+  if(pushBusy){pushAgain=true;return}   // a change arrived during a send: send again right after
   const body={uid:p.uid,bark:p.bark,sound:p.sound,level:p.level,call:!!p.call,enc:p.enc||'',url:location.href.split('#')[0],items:pushItems()};
   const sig=JSON.stringify(body);if(!force&&sig===pushLast)return;
   pushBusy=true;
-  try{const r=await fetch(PUSH_API+'/sync',{method:'POST',headers:{'content-type':'application/json'},body:verify?JSON.stringify({...body,verify:true}):sig});
+  try{const r=await fetch(PUSH_API+'/sync',{method:'POST',headers:{'content-type':'application/json'},keepalive:sig.length<60000,body:verify?JSON.stringify({...body,verify:true}):sig});
     const j=await r.json().catch(()=>({}));
     if(!r.ok){if(j.kind==='key'){p.keyOk=false;p.lastErr='key'}else throw new Error(j.error||('HTTP '+r.status))}
-    else{pushLast=sig;p.lastSync=Date.now();p.lastErr='';if(verify)p.keyOk=true;applyServerStates(j.server)}}
+    else{pushLast=sig;p.lastSync=Date.now();p.lastErr='';if(verify)p.keyOk=true;
+      p.srvLagMin=j.lastRun?Math.round(Math.max(0,(j.now||Date.now())-j.lastRun)/60000):-1;applyServerStates(j.server)}}
   catch(e){p.lastErr=String(e.message||e)}
-  finally{pushBusy=false;rawSave();renderPushStatus()}
+  finally{pushBusy=false;rawSave();renderPushStatus();if(pushAgain){pushAgain=false;setTimeout(()=>pushSync(false),50)}}
 }
 function pushStatusText(){
   const p=S.push||{};
@@ -1171,12 +1173,14 @@ function pushStatusText(){
   if(!p.bark)return'Не подключено.';
   if(p.lastErr==='key')return'Ключ не подошёл: Bark его не принял. Скопируйте ключ в Bark заново и нажмите «Сохранить и подключить».';
   if(!p.keyOk)return'Ключ ещё не проверен. Нажмите «Сохранить и подключить».';
-  if(p.lastErr)return'Нет связи с сервером: '+p.lastErr+'. Напоминания придут после восстановления связи.';
+  if(p.lastErr)return'Нет связи с сервером. Приложение повторяет попытку каждую минуту — проверьте интернет.';
+  if(srvStale())return p.srvLagMin<0?'Сервер напоминаний ещё ни разу не проверял расписание. Обычно это проходит за минуту — откройте настройки ещё раз.':`Сервер напоминаний не проверял расписание уже ${p.srvLagMin} мин. Уведомления могут не прийти.`;
   const k=barkKeyTail(p.bark);
   if(p.lastSync){const d=new Date(p.lastSync);return`Подключено${k?' (ключ …'+k+')':''} · расписание отправлено в ${pad(d.getHours())}:${pad(d.getMinutes())}`}
   return'Подключено · отправляю расписание…';
 }
-const pushOk=()=>!!(PUSH_API&&S.push&&S.push.bark&&S.push.keyOk&&S.push.lastSync&&!S.push.lastErr);
+const srvStale=()=>{const p=S.push||{};return p.srvLagMin==null?false:(p.srvLagMin<0||p.srvLagMin>5)};
+const pushOk=()=>!!(PUSH_API&&S.push&&S.push.bark&&S.push.keyOk&&S.push.lastSync&&!S.push.lastErr&&!srvStale());
 function barkKeyOnly(v){const m=String(v||'').match(/api\.day\.app\/([A-Za-z0-9]+)/)||String(v||'').trim().match(/^([A-Za-z0-9]{8,64})$/);return m?m[1]:''}
 function barkKeyTail(v){const m=String(v||'').match(/api\.day\.app\/([A-Za-z0-9]+)/)||String(v||'').trim().match(/^([A-Za-z0-9]{8,64})$/);return m?m[1].slice(-4):''}
 function barkInputProblem(v){
@@ -1264,10 +1268,13 @@ setInterval(()=>{
   updateTabs();
   checkReminders();
   const m=nowMin();
-  if(m!==lastMin){lastMin=m;const nl=$('#nowLine');if(nl)nl.style.top=(m/60*H)+'px'}
+  if(m!==lastMin){lastMin=m;const nl=$('#nowLine');if(nl)nl.style.top=(m/60*H)+'px';
+    const p=S.push;   // retry after a network error; refresh the schedule every 30 min while open
+    if(p&&p.keyOk&&p.bark&&((p.lastErr&&p.lastErr!=='key')||Date.now()-(p.lastSync||0)>30*60000))pushSync(true)}
   if(today()!==lastDay){const was=lastDay;lastDay=today();carryOver();if(UI.taskDate===was)UI.taskDate=lastDay;if(UI.calDate===was)UI.calDate=lastDay;renderAll();maybeReview()}
 },1000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden){carryOver();renderAll();checkReminders();maybeReview();schedulePushSync(true)}});
+window.addEventListener('pagehide',()=>{clearTimeout(pushT);pushSync(false)});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){clearTimeout(pushT);pushSync(false);return}if(!document.hidden){carryOver();renderAll();checkReminders();maybeReview();schedulePushSync(true)}});
 
 carryOver();renderAll();setPane(0);setTimeout(checkReminders,800);setTimeout(maybeReview,700);setTimeout(()=>schedulePushSync(true),1500);
 })();
