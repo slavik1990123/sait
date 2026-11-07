@@ -531,25 +531,26 @@ function renderTasks(){
       <button class="today-btn" data-act="ttoday" aria-label="Сегодня">${new Date().getDate()}</button></div>
     ${stripHTML(d,'task')}
   </header>
-  ${list.length?`<div class="summary"><div class="sum-line"><span>Сделано <b>${done.length} из ${list.length}</b></span><span>В работе <b id="sumTime">${fmtDur(total)}</b></span></div><div class="bar"><i style="width:${pct}%"></i></div></div>`:''}
+  ${list.length?`<div class="summary"><div class="sum-line"><span>Сделано <b>${done.length} из ${list.length}</b></span>${noTimer()?'':`<span>В работе <b id="sumTime">${fmtDur(total)}</b></span>`}</div><div class="bar"><i style="width:${pct}%"></i></div></div>`:''}
   <div class="list-scroll" id="listScroll">
     ${!list.length?`<div class="empty">На ${d===today()?'сегодня':dateLong(d)} задач нет.<br>Нажмите «+», чтобы добавить.</div>`:''}
     ${open.map(rowHTML).join('')}
     ${done.length?`<div class="section-lab">Выполнено · ${done.length}</div>`+done.map(rowHTML).join(''):''}
     <button class="someday-btn" data-act="someday">${INBOX}<span class="lbl">Когда-нибудь</span><b>${S.tasks.filter(k=>!k.date&&!k.done).length||''}</b><span class="chev">›</span></button>
-    ${list.length?`<div class="hint">Удерживайте задачу, чтобы перетащить её выше или ниже.<br>Свайп вправо — перенести на завтра, влево — удалить.<br>Нажмите на задачу, чтобы изменить её или потраченное время.</div>`:''}
+    ${list.length?`<div class="hint">Удерживайте задачу, чтобы перетащить её выше или ниже.<br>Свайп вправо — перенести на завтра, влево — удалить.<br>Нажмите на задачу, чтобы изменить её${noTimer()?'':' или потраченное время'}.</div>`:''}
   </div>`;
   const l=$('#listScroll');if(l)l.scrollTop=keep;
   updateTabs();
 }
+const noTimer=()=>!!(S.prefs&&S.prefs.noTimer);
 function rowHTML(k){
   const run=!!k.runningSince,sp=spentOf(k);
   const cls=['task-row',k.done?'done':'',run?'running':'',(!k.done&&k.carried)?'carried':''].join(' ');
   let meta='';
   if(!k.done&&k.carried)meta+=`<span class="badge carried">↻ Перенесено${k.carried>1?' ×'+k.carried:''}</span>`;
   if(run)meta+=`<span class="timer" data-timer="${k.id}">${fmtClock(sp)}</span>`;
-  else if(sp>0)meta+=`<span class="spent">⏱ ${fmtDur(sp)}</span>`;
-  const act=k.done?`<span class="done-mark" aria-label="Выполнено">✓</span>`:run?`<button class="btn ghost" data-act="pause">Пауза</button><button class="btn solid" data-act="finish">Завершить</button>`:`<button class="btn outline" data-act="start">Начать</button>`;
+  else if(sp>0&&!noTimer())meta+=`<span class="spent">⏱ ${fmtDur(sp)}</span>`;
+  const act=k.done?`<span class="done-mark" aria-label="Выполнено">✓</span>`:noTimer()?`<button class="btn solid" data-act="finish">Завершить</button>`:run?`<button class="btn ghost" data-act="pause">Пауза</button><button class="btn solid" data-act="finish">Завершить</button>`:`<button class="btn outline" data-act="start">Начать</button>`;
   return `<div class="${cls}" data-task="${k.id}"><div class="row-bg l">На завтра →</div><div class="row-bg r">← Удалить</div>
     <div class="row-inner"><div class="tmain" data-act="edit"><div class="ttitle">${k.important?FLAME:''}${esc(cap(k.title))}</div>${k.desc?`<div class="tdesc">${esc(cap(k.desc))}</div>`:''}<div class="tmeta">${meta}</div></div><div class="tact">${act}</div></div></div>`;
 }
@@ -564,7 +565,7 @@ function startTask(k){
   k.runningSince=Date.now();save();renderTasks();
 }
 function pauseTask(k){stopTimer(k);save();renderTasks()}
-function finishTask(k){stopTimer(k);k.done=true;k.doneAt=Date.now();save();renderTasks();toast(`Готово · ${fmtDur(k.spent)}`)}
+function finishTask(k){stopTimer(k);k.done=true;k.doneAt=Date.now();save();renderTasks();toast(noTimer()?'Готово':`Готово · ${fmtDur(k.spent)}`)}
 function toTomorrow(k){
   stopTimer(k);const t=today();const base=k.date<t?t:k.date;const old=k.date;k.date=addDays(base,1);save();renderTasks();
   toast(`Перенесено на ${dateLong(k.date)}`,'Отменить',()=>{k.date=old;save();renderTasks()});
@@ -911,7 +912,7 @@ function openTask(k){
   <input class="big-input" id="tkTitle" autocapitalize="sentences" placeholder="Что нужно сделать" value="${esc(t.title)}" autocomplete="off">
   <div class="fg"><textarea id="tkDesc" autocapitalize="sentences" placeholder="Короткое описание (необязательно)">${esc(t.desc)}</textarea></div>
   <div class="fg"><label class="frow"><span>Важная ${FLAME}</span><input type="checkbox" class="switch" id="tkImp" ${t.important?'checked':''}></label><label class="frow">Дата<input type="date" id="tkDate" value="${t.date}"></label>
-  ${isNew?'':`<div class="frow"><span>Потрачено</span><span class="dur"><input type="number" inputmode="numeric" id="tkH" min="0" value="${hh}"> ч <input type="number" inputmode="numeric" id="tkM" min="0" max="59" value="${mm}"> мин</span></div>`}</div>
+  ${isNew||noTimer()?'':`<div class="frow"><span>Потрачено</span><span class="dur"><input type="number" inputmode="numeric" id="tkH" min="0" value="${hh}"> ч <input type="number" inputmode="numeric" id="tkM" min="0" max="59" value="${mm}"> мин</span></div>`}</div>
   ${!isNew&&k.carried?`<p class="note">Задача переносилась ${k.carried} ${k.carried%10===1&&k.carried%100!==11?'раз':(k.carried%10>=2&&k.carried%10<=4&&(k.carried%100<10||k.carried%100>=20))?'раза':'раз'}.</p>`:''}
   ${!isNew&&!k.done?`<button class="wide-btn" data-s="later">Убрать в «Когда-нибудь»</button>`:''}
   ${!isNew&&k.done?`<button class="wide-btn" data-s="reopen">Вернуть в работу</button>`:''}
@@ -926,7 +927,7 @@ function openTask(k){
     else if(s==='save'){
       const title=cap($('#tkTitle').value.trim());if(!title){$('#tkTitle').focus();return}
       const tgt=k||t;tgt.title=title;tgt.desc=cap($('#tkDesc').value.trim());tgt.date=$('#tkDate').value||tgt.date;tgt.important=$('#tkImp').checked;
-      if(k){const ms=((+$('#tkH').value||0)*60+(+$('#tkM').value||0))*60000;if(Math.abs(ms-Math.floor(spentOf(k)/60000)*60000)>=60000||ms===0){tgt.spent=ms;if(tgt.runningSince)tgt.runningSince=Date.now()}}
+      if(k&&$('#tkH')){const ms=((+$('#tkH').value||0)*60+(+$('#tkM').value||0))*60000;if(Math.abs(ms-Math.floor(spentOf(k)/60000)*60000)>=60000||ms===0){tgt.spent=ms;if(tgt.runningSince)tgt.runningSince=Date.now()}}
       else S.tasks.push(t);
       save();closeSheet();UI.taskDate=tgt.date;renderTasks();
     }
@@ -941,12 +942,18 @@ function openSettings(){
   <button class="wide-btn" data-s="testn">Показать тестовое напоминание</button>
   ${perm==='default'?`<button class="wide-btn" data-s="perm">Разрешить системные уведомления</button>`:''}
   ${pushSettingsHTML()}
+  <h4>Задачи</h4>
+  <div class="fg"><label class="frow">Не отслеживать время задач<input type="checkbox" class="switch" id="prNoTimer" ${noTimer()?'checked':''}></label></div>
+  <p class="note">Вместо кнопок «Начать», «Пауза» и «Завершить» у задачи останется одна — «Завершить». Всё остальное работает как раньше: выполненные уходят вниз, невыполненные переносятся на следующий день.</p>
   <h4>Резервная копия</h4>
   <p class="note">Данные хранятся на этом устройстве. Скопируйте их, чтобы сохранить или перенести на другое устройство.</p>
   <button class="wide-btn" data-s="copy">Скопировать данные</button>
   <textarea class="json" id="jsonBox" placeholder="Вставьте сюда скопированные данные, чтобы восстановить"></textarea>
   <button class="wide-btn" data-s="restore">Восстановить из вставленного</button>`);
   if(S.push&&S.push.bark&&S.push.keyOk&&PUSH_API)pushSync(true);
+  const nt=$('#prNoTimer');if(nt)nt.onchange=()=>{S.prefs=S.prefs||{};S.prefs.noTimer=nt.checked;
+    if(nt.checked)S.tasks.forEach(k=>stopTimer(k));save();renderTasks();
+    toast(nt.checked?'Время задач больше не отслеживается':'Отслеживание времени задач включено')};
   const pkDirty=msg=>{const sb=sheet.querySelector('[data-s="pk-save"]');if(sb)sb.classList.add('attn');toast(msg+'. Нажмите «Сохранить и подключить»','Сохранить',()=>pushSettingsAction('pk-save'))};
   const lv=$('#pkLevel');if(lv)lv.onchange=()=>{$('#pkLevelNote').textContent=(BARK_LEVELS.find(x=>x[0]===lv.value)||BARK_LEVELS[0])[1];pkDirty('Важность изменена')};
   const snd=$('#pkSound');if(snd)snd.onchange=()=>pkDirty('Звук изменён');
