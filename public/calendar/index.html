@@ -753,6 +753,15 @@ app.addEventListener('pointercancel',()=>endGesture(true));
 /* ---------- moving meetings by drag ----------
    mouse: press + move >5px; touch: long press 420ms, then move. Snap 15 min, duration kept. */
 const SNAP=15;
+/* haptic tick: iOS 18+ gives a light tap when a native switch toggles; Android uses vibrate */
+let hapLabel=null;
+function haptic(){
+  try{if(navigator.vibrate&&navigator.vibrate(6))return}catch(_){}
+  try{if(!hapLabel){const l=document.createElement('label');l.setAttribute('aria-hidden','true');
+      l.style.cssText='position:fixed;left:-100px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;overflow:hidden';
+      const i=document.createElement('input');i.type='checkbox';i.setAttribute('switch','');i.tabIndex=-1;l.appendChild(i);document.body.appendChild(l);hapLabel=l}
+    hapLabel.click()}catch(_){}
+}
 const evDur=ev=>{const s=toMin(ev.start);let e=toMin(ev.end);if(e<=s)e=s+30;return e-s};
 const shortDate=d=>`${WD[wdi(d)]}, ${parse(d).getDate()} ${MONTHS_G[parse(d).getMonth()]}`;
 function startEvDrag(g,x,y,pid){
@@ -773,7 +782,7 @@ function startEvDrag(g,x,y,pid){
   const tip=document.createElement('div');tip.className='drag-tip';app.appendChild(tip);g.tip=tip;
   suppressUntil=Date.now()+600000;
   try{app.setPointerCapture(pid)}catch(_){}
-  try{navigator.vibrate&&navigator.vibrate(12)}catch(_){}
+  haptic();
   const loop=()=>{if(G!==g||g.mode!=='evdrag')return;autoScroll(g);g.raf=requestAnimationFrame(loop)};g.raf=requestAnimationFrame(loop);
   moveEvDrag(g);
 }
@@ -805,7 +814,7 @@ function moveEvDrag(g){
         if(g.ghost.parentNode!==col){col.appendChild(g.ghost);g.ghost.style.transition='none';g.ghost.style.top=(s/60*H)+'px';void g.ghost.offsetWidth;g.ghost.style.transition=''}
         g.ghost.style.top=(s/60*H)+'px';g.ghost.style.height=(g.dur/60*H-1)+'px';
         if(g.lastS!==s||g.lastD!==d){
-          if(g.lastS!=null){g.ghost.classList.remove('tick');void g.ghost.offsetWidth;g.ghost.classList.add('tick');try{navigator.vibrate&&navigator.vibrate(4)}catch(_){}}
+          if(g.lastS!=null){g.ghost.classList.remove('tick');void g.ghost.offsetWidth;g.ghost.classList.add('tick');haptic()}
           g.lastS=s;g.lastD=d;g.pill.textContent=st;g.pill.style.top=(s/60*H)+'px'}
         g.pill.hidden=false;
         label=`${shortDate(d)} · ${st}–${en}`;
