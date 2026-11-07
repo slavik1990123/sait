@@ -283,6 +283,8 @@ input,textarea,select{font:inherit;font-size:16px;color:var(--fg)}
 .wide-btn.danger{color:var(--danger)}
 .note{font-size:13px;color:var(--muted);line-height:1.45;padding:2px 4px 12px}
 .pk-status{font-weight:600}
+.snd-pick{display:flex;align-items:center;gap:8px}
+.snd-pick select{max-width:46vw}
 .pk-status.ok{color:var(--ok)}
 .pk-status.err{color:var(--danger)}
 .wide-btn.attn{background:var(--accent);color:var(--accent-fg)}
@@ -1113,7 +1115,7 @@ function pushSettingsHTML(){
   <p class="note">Через бесплатное приложение <b>Bark</b> из App Store. Установите его, скопируйте свой ключ (ссылку вида api.day.app/…) и вставьте ниже. Напоминания придут, даже когда «Календарь» закрыт, и будут повторяться каждые ${REM_CFG.repeatEveryMin} мин (не больше ${REM_CFG.maxRepeats} раз), пока вы не нажмёте «Увидел» здесь.</p>
   <div class="fg">
     <input class="plain" id="pkBark" placeholder="Ключ или ссылка из Bark" value="${esc(p.bark||'')}" autocomplete="off" autocapitalize="off" spellcheck="false">
-    <label class="frow">Звук<select id="pkSound">${BARK_SOUNDS.map(([v,l])=>`<option value="${v}" ${p.sound===v?'selected':''}>${l}</option>`).join('')}</select></label>
+    <div class="frow">Звук<span class="snd-pick"><select id="pkSound" aria-label="Звук напоминания">${BARK_SOUNDS.map(([v,l])=>`<option value="${v}" ${p.sound===v?'selected':''}>${l}</option>`).join('')}</select><button class="btn outline sm" data-s="pk-listen" aria-label="Послушать выбранный звук">▶ Послушать</button></span></div>
     <label class="frow">Важность<select id="pkLevel">${BARK_LEVELS.map(([v,l])=>`<option value="${v}" ${p.level===v?'selected':''}>${l.split(' — ')[0]}</option>`).join('')}</select></label>
     <label class="frow">Звонить 30 секунд<input type="checkbox" class="switch" id="pkCall" ${p.call?'checked':''}></label>
   </div>
@@ -1136,6 +1138,13 @@ async function pushSettingsAction(s){
     if(!p.bark){toast('Вставьте ключ из Bark');return true}
     if(!PUSH_API){rawSave();toast('Сохранено. Сервер напоминаний пока не подключён');return true}
     rawSave();await pushSync(true);if(!S.push.lastErr){const sb=document.querySelector('[data-s="pk-save"]');if(sb)sb.classList.remove('attn')}toast(S.push.lastErr?'Не удалось связаться с сервером':'Подключено. Напоминания придут на экран блокировки');return true}
+  if(s==='pk-listen'){
+    const bark=($('#pkBark').value||'').trim(),snd=$('#pkSound').value,name=(BARK_SOUNDS.find(x=>x[0]===snd)||[,snd])[1];
+    if(!bark){toast('Сначала вставьте ключ из Bark — звук придёт на телефон');return true}
+    if(!PUSH_API){toast('Сервер напоминаний пока не подключён');return true}
+    try{const r=await fetch(PUSH_API+'/test',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({uid:p.uid,bark,sound:snd,level:$('#pkLevel').value,call:false,enc:'',title:'Звук: '+name,body:'Так будет звучать напоминание о встрече'})});
+      toast(r.ok?`Отправил пробное уведомление со звуком «${name}»`:'Bark не принял уведомление — проверьте ключ')}
+    catch(_){toast('Нет связи с сервером напоминаний')}return true}
   if(s==='pk-test'){readForm();if(!p.bark){toast('Вставьте ключ из Bark');return true}
     if(!PUSH_API){toast('Сервер напоминаний пока не подключён');return true}
     try{const r=await fetch(PUSH_API+'/test',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({uid:p.uid,bark:p.bark,sound:p.sound,level:p.level,call:!!p.call,enc:p.enc&&p.enc.length===16?p.enc:'',url:location.href.split('#')[0]})});
