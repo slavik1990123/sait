@@ -1,5 +1,5 @@
 // Offline support: the app shell is cached; the page itself is fetched fresh when online.
-const V = 'kalendar-v8';
+const V = 'kalendar-v9';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener('activate', e => {

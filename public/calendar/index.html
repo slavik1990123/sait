@@ -291,6 +291,17 @@ input,textarea,select{font:inherit;font-size:16px;color:var(--fg)}
 @keyframes pkFlash{0%{background:rgba(24,128,56,.22)}100%{background:transparent}}
 .pk-status{border-radius:8px;padding:6px 4px}
 .wide-btn.attn{background:var(--accent);color:var(--accent-fg)}
+.key-box{background:var(--bg);border:2px solid var(--accent);border-radius:14px;padding:14px;margin-bottom:12px;display:flex;flex-direction:column;gap:10px}
+.key-box.ok{border-color:var(--ok)}
+.key-lab{font-weight:700;font-size:16px}
+.key-box.ok .key-lab{color:var(--ok)}
+.key-row{display:flex;gap:8px;align-items:stretch}
+.key-input{flex:1;min-width:0;border:1.5px solid var(--line);background:var(--surface);border-radius:10px;padding:12px;font-size:16px;font-family:ui-monospace,Menlo,monospace}
+.key-input:focus{border-color:var(--accent);outline:none}
+.btn.solid-accent{background:var(--accent);color:var(--accent-fg);height:auto;padding:0 14px;border-radius:10px}
+.key-box.ok .key-steps{display:none}
+.key-steps{margin:0;padding-left:20px;font-size:13px;color:var(--muted);line-height:1.5}
+.key-save{margin:0;background:var(--surface)}
 .sheet h4{margin:14px 4px 8px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
 .sheet textarea.json{width:100%;min-height:90px;border:0;border-radius:12px;background:var(--bg);padding:12px;font-family:ui-monospace,Menlo,monospace;font-size:12px!important;margin-bottom:10px}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
@@ -915,7 +926,7 @@ function openSettings(){
   const lv=$('#pkLevel');if(lv)lv.onchange=()=>{$('#pkLevelNote').textContent=(BARK_LEVELS.find(x=>x[0]===lv.value)||BARK_LEVELS[0])[1];pkDirty('Важность изменена')};
   const snd=$('#pkSound');if(snd)snd.onchange=()=>pkDirty('Звук изменён');
   const cl=$('#pkCall');if(cl)cl.onchange=()=>pkDirty(cl.checked?'Звонок 30 секунд включён':'Звонок 30 секунд выключен');
-  const ek=$('#pkEnc');if(ek)ek.oninput=()=>{const sb=sheet.querySelector('[data-s="pk-save"]');if(sb)sb.classList.add('attn')};
+  const bk=$('#pkBark');if(bk)bk.oninput=()=>{const sb=sheet.querySelector('[data-s="pk-save"]');if(sb)sb.classList.add('attn')};
   sheet.onclick=async x=>{
     const b=x.target.closest('[data-s]');if(!b)return;const s=b.dataset.s;
     if(s.startsWith('pk-')){await pushSettingsAction(s);return}
@@ -1115,6 +1126,7 @@ function pushStatusText(){
   return'Подключено · отправляю расписание…';
 }
 const pushOk=()=>!!(PUSH_API&&S.push&&S.push.bark&&S.push.keyOk&&S.push.lastSync&&!S.push.lastErr);
+function barkKeyOnly(v){const m=String(v||'').match(/api\.day\.app\/([A-Za-z0-9]+)/)||String(v||'').trim().match(/^([A-Za-z0-9]{8,64})$/);return m?m[1]:''}
 function barkKeyTail(v){const m=String(v||'').match(/api\.day\.app\/([A-Za-z0-9]+)/)||String(v||'').trim().match(/^([A-Za-z0-9]{8,64})$/);return m?m[1].slice(-4):''}
 function barkInputProblem(v){
   v=String(v||'').trim();if(!v)return'Вставьте ключ из Bark';
@@ -1126,18 +1138,19 @@ function renderPushStatus(){const el=document.getElementById('pkStatus');if(el){
 function pushSettingsHTML(){
   const p=pushCfg();
   return `<h4>Уведомления на заблокированный экран</h4>
-  <p class="note">Через бесплатное приложение <b>Bark</b> из App Store. Установите его, нажмите в Bark <b>Enable</b> и разрешите уведомления, затем кнопкой <b>Copy</b> скопируйте ссылку с ключом (вида api.day.app/…) и вставьте ниже. Напоминания придут, даже когда «Календарь» закрыт, и будут повторяться каждые ${REM_CFG.repeatEveryMin} мин (не больше ${REM_CFG.maxRepeats} раз), пока вы не нажмёте «Увидел» здесь.</p>
+  <p class="note">Через бесплатное приложение <b>Bark</b> из App Store. Напоминания придут, даже когда «Календарь» закрыт, и будут повторяться каждые ${REM_CFG.repeatEveryMin} мин (не больше ${REM_CFG.maxRepeats} раз), пока вы не нажмёте «Увидел» здесь.</p>
+  <div class="key-box${pushOk()?' ok':''}">
+    <label class="key-lab" for="pkBark">${pushOk()?'✓ Ключ Bark принят':'Ключ из Bark'}</label>
+    <div class="key-row"><input class="key-input" id="pkBark" placeholder="Ключ из Bark" value="${esc(p.bark||'')}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="btn solid-accent" data-s="pk-paste">Вставить</button></div>
+    <ol class="key-steps"><li>В Bark нажмите <b>Enable</b> и разрешите уведомления</li><li>Нажмите <b>Copy</b> — скопируется строка с ключом</li><li>Здесь нажмите <b>Вставить</b>, затем <b>Сохранить и подключить</b></li></ol>
+    <button class="wide-btn key-save" data-s="pk-save">Сохранить и подключить</button>
+  </div>
   <div class="fg">
-    <input class="plain" id="pkBark" placeholder="Ключ или ссылка из Bark" value="${esc(p.bark||'')}" autocomplete="off" autocapitalize="off" spellcheck="false">
     <div class="frow">Звук<span class="snd-pick"><select id="pkSound" aria-label="Звук напоминания">${BARK_SOUNDS.map(([v,l])=>`<option value="${v}" ${p.sound===v?'selected':''}>${l}</option>`).join('')}</select><button class="btn outline sm" data-s="pk-listen" aria-label="Послушать выбранный звук">▶ Послушать</button></span></div>
     <label class="frow">Важность<select id="pkLevel">${BARK_LEVELS.map(([v,l])=>`<option value="${v}" ${p.level===v?'selected':''}>${l.split(' — ')[0]}</option>`).join('')}</select></label>
     <label class="frow">Звонить 30 секунд<input type="checkbox" class="switch" id="pkCall" ${p.call?'checked':''}></label>
   </div>
   <p class="note" id="pkLevelNote">${esc((BARK_LEVELS.find(x=>x[0]===p.level)||BARK_LEVELS[0])[1])}</p>
-  <div class="fg"><input class="plain" id="pkEnc" placeholder="Ключ шифрования, 16 символов (необязательно)" value="${esc(p.enc||'')}" maxlength="16" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
-  <p class="note">Шифрование скрывает названия встреч от сервера Bark. Нажмите «Создать ключ» и введите этот же ключ в Bark → Настройки → Шифрование (AES-128, режим CBC).</p>
-  <button class="wide-btn" data-s="pk-gen">Создать ключ шифрования</button>
-  <button class="wide-btn" data-s="pk-save">Сохранить и подключить</button>
   <button class="wide-btn" data-s="pk-test">Проверить — прислать тестовое уведомление</button>
   <p class="note pk-status${pushOk()?' ok':''}" id="pkStatus">${esc(pushStatusText())}</p>
   ${p.bark?`<button class="wide-btn danger" data-s="pk-off">Отключить уведомления на экран блокировки</button>`:''}`;
@@ -1146,16 +1159,24 @@ function showPushOk(){const st=document.getElementById('pkStatus');if(!st)return
 async function pushSettingsAction(s){
   const p=pushCfg();
   if(!$('#pkBark'))return false;
-  const readForm=()=>{p.bark=($('#pkBark').value||'').trim();p.sound=$('#pkSound').value;p.level=$('#pkLevel').value;p.call=$('#pkCall').checked;p.enc=($('#pkEnc').value||'').trim()};
+  const readForm=()=>{p.bark=($('#pkBark').value||'').trim();p.sound=$('#pkSound').value;p.level=$('#pkLevel').value;p.call=$('#pkCall').checked;p.enc=''};
+  if(s==='pk-paste'){
+    try{const t=(await navigator.clipboard.readText()||'').trim();
+      if(!t){toast('Буфер обмена пуст. Сначала нажмите Copy в Bark');return true}
+      $('#pkBark').value=t;const sb=document.querySelector('[data-s="pk-save"]');if(sb)sb.classList.add('attn');
+      const bad=barkInputProblem(t);toast(bad||'Вставлено. Теперь нажмите «Сохранить и подключить»')}
+    catch(_){const i=$('#pkBark');i.focus();i.select();toast('Нажмите в поле и выберите «Вставить»')}
+    return true}
   if(s==='pk-gen'){const a=new Uint8Array(16);crypto.getRandomValues(a);$('#pkEnc').value=[...a].map(b=>'abcdefghjkmnpqrstuvwxyz23456789'[b%31]).join('');toast('Ключ создан. Введите его в Bark и нажмите «Сохранить»');return true}
   if(s==='pk-save'){readForm();
-    if(p.enc&&p.enc.length!==16){toast('Ключ шифрования должен быть ровно 16 символов');return true}
     const bad=barkInputProblem(p.bark);if(bad){toast(bad);return true}
+    p.bark=barkKeyOnly(p.bark);$('#pkBark').value=p.bark;
     if(!PUSH_API){rawSave();toast('Сохранено. Сервер напоминаний пока не подключён');return true}
     if(p.bark!==p.verifiedBark)p.keyOk=false;
     rawSave();renderPushStatus();toast('Проверяю ключ…');
     await pushSync(true,true);
     if(S.push.keyOk&&!S.push.lastErr){S.push.verifiedBark=p.bark;rawSave();const sb=document.querySelector('[data-s="pk-save"]');if(sb)sb.classList.remove('attn');
+      const kb=document.querySelector('.key-box');if(kb){kb.classList.add('ok');kb.querySelector('.key-lab').textContent='✓ Ключ Bark принят'}
       toast('Ключ принят, всё подключено ✓ На телефон пришло уведомление «Ключ принят»');showPushOk()}
     else toast(S.push.lastErr==='key'?'Ключ не подошёл. Скопируйте его в Bark заново':'Не удалось связаться с сервером. Попробуйте ещё раз');
     return true}
